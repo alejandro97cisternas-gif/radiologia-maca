@@ -2,6 +2,7 @@ services:
   db:
     image: postgres:16
     container_name: maca_postgres
+    env_file: ./backend/.env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -17,21 +18,10 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: maca_backend
+    env_file: ./backend/.env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      SECRET_KEY: ${SECRET_KEY}
-      BASE_DOMAIN: ${BASE_DOMAIN}
-      FRONTEND_URL: ${FRONTEND_URL}
-      APP_URL: ${APP_URL}
-      SMTP_HOST: ${SMTP_HOST}
-      SMTP_PORT: ${SMTP_PORT}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-      SMTP_FROM: ${SMTP_FROM}
       STORAGE_ROOT: /app/data
-      SUPERADMIN_USERNAME: ${SUPERADMIN_USERNAME}
-      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD}
-      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL}
     volumes:
       - maca_storage:/app/data
     depends_on:
