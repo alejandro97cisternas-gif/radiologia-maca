@@ -86,7 +86,7 @@ export default function AdminDashboard() {
     { title: 'Nombre', dataIndex: 'nombre_display', key: 'nombre', render: (v: string, r: Radiologo) => (
       <Space direction="vertical" size={0}>
         <Text strong>{v}</Text>
-        <Text type="secondary" style={{ fontSize: 12 }}>@{r.username} · {r.slug}.dominio.com</Text>
+        <Text type="secondary" style={{ fontSize: 12 }}>@{r.username} · {r.slug}.{import.meta.env.VITE_BASE_DOMAIN || 'novex.cloud'}</Text>
       </Space>
     )},
     { title: 'Email', dataIndex: 'email', key: 'email' },
@@ -137,7 +137,7 @@ export default function AdminDashboard() {
             <Input placeholder="Dra. María Pérez" />
           </Form.Item>
           <Form.Item name="slug" label="Subdominio" rules={[{ required: true, pattern: /^[a-z0-9-]+$/, message: 'Solo minúsculas, números y guiones' }]}>
-            <Input addonAfter=".tudominio.com" placeholder="draperez" />
+            <Input addonAfter="{`.${import.meta.env.VITE_BASE_DOMAIN || 'novex.cloud'}`}" placeholder="draperez" />
           </Form.Item>
           <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}>
             <Input />
@@ -159,7 +159,7 @@ export default function AdminDashboard() {
             <Input />
           </Form.Item>
           <Form.Item name="slug" label="Subdominio" rules={[{ required: true, pattern: /^[a-z0-9-]+$/ }]}>
-            <Input addonAfter=".tudominio.com" />
+            <Input addonAfter="{`.${import.meta.env.VITE_BASE_DOMAIN || 'novex.cloud'}`}" />
           </Form.Item>
           <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}>
             <Input />
