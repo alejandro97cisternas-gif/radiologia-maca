@@ -34,8 +34,7 @@ class Settings(BaseSettings):
     SUPERADMIN_PASSWORD: str = "change-me-in-production"
     SUPERADMIN_EMAIL: str = ""
 
-    class Config:
-        env_file = ".env"
+    model_config = {"env_file": ".env", "extra": "ignore"}
 
 
 settings = Settings()
