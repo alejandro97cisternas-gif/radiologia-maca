@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+
+const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'novex.cloud'
 import { useNavigate } from 'react-router-dom'
 import {
   Table, Button, Tag, Space, Modal, Form, Input, Popconfirm,
@@ -86,7 +88,7 @@ export default function AdminDashboard() {
     { title: 'Nombre', dataIndex: 'nombre_display', key: 'nombre', render: (v: string, r: Radiologo) => (
       <Space direction="vertical" size={0}>
         <Text strong>{v}</Text>
-        <Text type="secondary" style={{ fontSize: 12 }}>@{r.username} · {r.slug}.{import.meta.env.VITE_BASE_DOMAIN || 'novex.cloud'}</Text>
+        <Text type="secondary" style={{ fontSize: 12 }}>@{r.username} · {r.slug}.{BASE_DOMAIN}</Text>
       </Space>
     )},
     { title: 'Email', dataIndex: 'email', key: 'email' },
@@ -137,7 +139,7 @@ export default function AdminDashboard() {
             <Input placeholder="Dra. María Pérez" />
           </Form.Item>
           <Form.Item name="slug" label="Subdominio" rules={[{ required: true, pattern: /^[a-z0-9-]+$/, message: 'Solo minúsculas, números y guiones' }]}>
-            <Input addonAfter="{`.${import.meta.env.VITE_BASE_DOMAIN || 'novex.cloud'}`}" placeholder="draperez" />
+            <Input addonAfter="{`.${BASE_DOMAIN}`}" placeholder="draperez" />
           </Form.Item>
           <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}>
             <Input />
@@ -159,7 +161,7 @@ export default function AdminDashboard() {
             <Input />
           </Form.Item>
           <Form.Item name="slug" label="Subdominio" rules={[{ required: true, pattern: /^[a-z0-9-]+$/ }]}>
-            <Input addonAfter="{`.${import.meta.env.VITE_BASE_DOMAIN || 'novex.cloud'}`}" />
+            <Input addonAfter="{`.${BASE_DOMAIN}`}" />
           </Form.Item>
           <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}>
             <Input />
