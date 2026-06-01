@@ -139,7 +139,7 @@ export default function AdminDashboard() {
             <Input placeholder="Dra. María Pérez" />
           </Form.Item>
           <Form.Item name="slug" label="Subdominio" rules={[{ required: true, pattern: /^[a-z0-9-]+$/, message: 'Solo minúsculas, números y guiones' }]}>
-            <Input addonAfter="{`.${BASE_DOMAIN}`}" placeholder="draperez" />
+            <Input addonAfter={`.${BASE_DOMAIN}`} placeholder="draperez" />
           </Form.Item>
           <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}>
             <Input />
@@ -161,7 +161,7 @@ export default function AdminDashboard() {
             <Input />
           </Form.Item>
           <Form.Item name="slug" label="Subdominio" rules={[{ required: true, pattern: /^[a-z0-9-]+$/ }]}>
-            <Input addonAfter="{`.${BASE_DOMAIN}`}" />
+            <Input addonAfter={`.${BASE_DOMAIN}`} />
           </Form.Item>
           <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}>
             <Input />
