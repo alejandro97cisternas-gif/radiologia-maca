@@ -1,0 +1,49 @@
+from pydantic_settings import BaseSettings
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+class Settings(BaseSettings):
+    DATABASE_URL: str
+    SECRET_KEY: str = "dev-secret-key"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
+
+    APP_URL: str = "http://localhost:8000"
+    FRONTEND_URL: str = "http://localhost:5173"
+    BASE_DOMAIN: str = "localhost"  # tudominio.com en producción
+
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = ""
+
+    STORAGE_ROOT: str = "data"
+
+    # Storage backend: "local" | "r2"
+    STORAGE_BACKEND: str = "local"
+    R2_ACCOUNT_ID: str = ""
+    R2_ACCESS_KEY: str = ""
+    R2_SECRET_KEY: str = ""
+    R2_BUCKET: str = ""
+    R2_URL_EXPIRY_SECONDS: int = 3600  # URLs firmadas expiran en 1h
+
+    # Superadmin seed
+    SUPERADMIN_USERNAME: str = "admin"
+    SUPERADMIN_PASSWORD: str = "change-me-in-production"
+    SUPERADMIN_EMAIL: str = ""
+
+    class Config:
+        env_file = ".env"
+
+
+settings = Settings()
+
+# Compat layer para email_service.py
+SMTP_HOST = settings.SMTP_HOST
+SMTP_PORT = settings.SMTP_PORT
+SMTP_USER = settings.SMTP_USER
+SMTP_PASSWORD = settings.SMTP_PASSWORD
+SMTP_FROM = settings.SMTP_FROM or settings.SMTP_USER
+APP_URL = settings.APP_URL

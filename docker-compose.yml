@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16
+    container_name: Macarena_postgres
+    environment:
+      POSTGRES_USER: maca
+      POSTGRES_PASSWORD: maca123
+      POSTGRES_DB: maca_informes
+    ports:
+      - "5433:5432"
+    volumes:
+      - maca_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  maca_pgdata:

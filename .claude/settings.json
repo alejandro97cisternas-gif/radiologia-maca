@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmd /c \"cd C:\\\\Users\\\\aleja\\\\AI-engineer-mes1\\\\Centro_Amex_Radiologia\\\\frontend && npx tsc --noEmit 2>&1\")",
+      "Bash(timeout 25)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\aleja\\AI-engineer-mes1\\Centro_Amex_Radiologia\\backend\\modulos\\recepcion_pacientes",
+      "C:\\Users\\aleja\\AI-engineer-mes1\\Centro_Amex_Radiologia\\backend\\modulos\\operaciones_clinicas"
+    ]
+  }
+}

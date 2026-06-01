@@ -1,0 +1,204 @@
+import io
+import uuid
+import zipfile
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+from core.database import get_db
+from core.dependencies import get_current_user
+from core.tenant import get_tenant
+from core.storage import guardar_informe_pdf, get_url, get_bytes, EXAMENES_3D
+from core.email_service import enviar_informe_listo_a_derivador
+from core.config import settings
+from modulos.examenes.models import Examen, TipoExamenCustom
+from modulos.informes.models import Informe
+from modulos.incidencias.models import Incidencia
+from modulos.notificaciones.models import Notificacion
+from modulos.derivadores.models import Derivador
+
+router = APIRouter(prefix="/api/examenes", tags=["examenes"])
+
+ESTADOS_VALIDOS = ["PENDIENTE", "EN_PROCESO", "COMPLETADO"]
+_TIPOS_3D = EXAMENES_3D
+
+TIPOS_EXAMEN_BASE = [
+    "PANO", "CBCT-LOC", "CBCT-SUP", "CBCT-INF", "CBCT-BI",
+    "RETRO", "BW-UNI", "BW-BIL", "TELE-L", "ORTO",
+]
+
+
+@router.get("/tipos")
+def listar_tipos(request: Request, db: Session = Depends(get_db)):
+    radiologo = get_tenant(request)
+    custom = db.query(TipoExamenCustom).filter(
+        TipoExamenCustom.radiologo_id == radiologo.id,
+        TipoExamenCustom.activo == True,
+    ).all()
+    base = [
+        {"nombre": t, "dimension": "3D" if t in _TIPOS_3D else "2D", "custom": False}
+        for t in TIPOS_EXAMEN_BASE
+    ]
+    extra = [{"id": c.id, "nombre": c.nombre, "dimension": c.dimension, "custom": True} for c in custom]
+    return base + extra
+
+
+def _serializar(e: Examen, inc_estado: str | None = None) -> dict:
+    return {
+        "id": e.id,
+        "paciente": e.paciente.nombre_completo,
+        "rut": e.paciente.rut,
+        "paciente_id": e.paciente_id,
+        "derivador": e.derivador.nombre,
+        "derivador_id": e.derivador_id,
+        "tipo_examen": e.tipo_examen,
+        "estado": e.estado,
+        "creado_en": e.creado_en,
+        "completado_en": e.completado_en,
+        "imagenes_count": len(e.imagenes),
+        "tiene_informe": e.informe is not None,
+        "informe_token": e.informe.token_publico if e.informe else None,
+        "incidencia_estado": inc_estado,
+        "version": e.version or 0,
+        "derivador_color": e.derivador.color or "#6b7280",
+    }
+
+
+def _inc_map(db: Session, exam_ids: list[int]) -> dict[int, str]:
+    if not exam_ids:
+        return {}
+    return {i.examen_id: i.estado for i in db.query(Incidencia).filter(Incidencia.examen_id.in_(exam_ids)).all()}
+
+
+def _examen_del_tenant(examen_id: int, radiologo_id: int, db: Session) -> Examen:
+    e = (db.query(Examen)
+         .join(Derivador, Examen.derivador_id == Derivador.id)
+         .filter(Examen.id == examen_id, Derivador.radiologo_id == radiologo_id)
+         .first())
+    if not e:
+        raise HTTPException(404, "Examen no encontrado")
+    return e
+
+
+@router.get("/todos")
+def todos(request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    radiologo = get_tenant(request)
+    examenes = (db.query(Examen)
+                .join(Derivador, Examen.derivador_id == Derivador.id)
+                .filter(Derivador.radiologo_id == radiologo.id, Examen.estado != "BORRADOR")
+                .order_by(Examen.creado_en.desc()).all())
+    inc = _inc_map(db, [e.id for e in examenes])
+    return [_serializar(e, inc.get(e.id)) for e in examenes]
+
+
+@router.get("/{examen_id}")
+def detalle(examen_id: int, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    radiologo = get_tenant(request)
+    e = _examen_del_tenant(examen_id, radiologo.id, db)
+    inc = _inc_map(db, [e.id])
+    data = _serializar(e, inc.get(e.id))
+    data["imagenes"] = [
+        {"id": img.id, "tipo": img.tipo, "nombre": img.nombre_archivo, "url": get_url(img.ruta)}
+        for img in e.imagenes
+    ]
+    return data
+
+
+@router.patch("/{examen_id}/estado")
+def actualizar_estado(examen_id: int, body: dict, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    estado = body.get("estado")
+    if estado not in ESTADOS_VALIDOS:
+        raise HTTPException(400, f"Estado inválido. Válidos: {ESTADOS_VALIDOS}")
+    radiologo = get_tenant(request)
+    e = _examen_del_tenant(examen_id, radiologo.id, db)
+    e.estado = estado
+    if estado == "COMPLETADO":
+        e.completado_en = datetime.now(timezone.utc)
+    db.commit()
+    return {"id": e.id, "estado": e.estado}
+
+
+@router.post("/{examen_id}/informe", status_code=201)
+async def subir_informe(
+    examen_id: int,
+    request: Request,
+    archivo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    radiologo = get_tenant(request)
+    examen = _examen_del_tenant(examen_id, radiologo.id, db)
+
+    datos = await archivo.read()
+    rut = examen.paciente.rut or f"pac{examen.paciente_id}"
+    path = guardar_informe_pdf(radiologo.id, rut, examen_id, examen.tipo_examen, archivo.filename, datos)
+
+    informe = db.query(Informe).filter(Informe.examen_id == examen_id).first()
+    if informe:
+        informe.ruta_pdf = str(path)
+    else:
+        token = str(uuid.uuid4())
+        informe = Informe(examen_id=examen_id, ruta_pdf=str(path), token_publico=token)
+        db.add(informe)
+
+    examen.estado = "COMPLETADO"
+    examen.completado_en = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(informe)
+
+    link_pdf = get_url(path)
+    link_portal = f"https://{radiologo.slug}.{settings.BASE_DOMAIN}/portal/dashboard"
+    ok, _ = enviar_informe_listo_a_derivador(
+        examen.derivador, examen.paciente, examen, link_pdf, link_portal,
+        radiologo_nombre=radiologo.nombre_display or "Radiología",
+    )
+    if ok:
+        examen.notificacion_derivador_enviada = True
+
+    db.add(Notificacion(
+        radiologo_id=radiologo.id,
+        mensaje=f"Informe listo — {examen.paciente.nombre_completo} · {examen.tipo_examen}",
+        derivador_id=examen.derivador_id,
+        examen_id=examen_id,
+    ))
+    db.commit()
+
+    return {"informe_id": informe.id, "token_publico": informe.token_publico, "link_pdf": link_pdf, "notificacion_enviada": ok}
+
+
+@router.get("/{examen_id}/descargar-imagenes")
+def descargar_imagenes(examen_id: int, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    radiologo = get_tenant(request)
+    e = _examen_del_tenant(examen_id, radiologo.id, db)
+    rut = e.paciente.rut or f"pac{e.paciente_id}"
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for img in e.imagenes:
+            nombre = img.ruta.rsplit("/", 1)[-1]
+            try:
+                zf.writestr(nombre, get_bytes(img.ruta))
+            except Exception:
+                pass
+    buf.seek(0)
+
+    return StreamingResponse(
+        buf, media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{rut}-{e.tipo_examen}.zip"'},
+    )
+
+
+@router.get("/informe/{token}")
+def ver_informe_publico(token: str, db: Session = Depends(get_db)):
+    informe = db.query(Informe).filter(Informe.token_publico == token).first()
+    if not informe:
+        raise HTTPException(404, "Informe no encontrado")
+    examen = informe.examen
+    return {
+        "paciente": examen.paciente.nombre_completo,
+        "rut": examen.paciente.rut,
+        "tipo_examen": examen.tipo_examen,
+        "derivador": examen.derivador.nombre,
+        "link_pdf": get_url(informe.ruta_pdf),
+        "imagenes": [{"tipo": img.tipo, "url": get_url(img.ruta)} for img in examen.imagenes],
+    }

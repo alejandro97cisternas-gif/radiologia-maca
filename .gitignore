@@ -1,0 +1,47 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# ── Entornos y secretos ───────────────────────────────────────────────────────
+backend/.env
+frontend/.env
+.env
+.env.local
+.env.production
+*.env
+
+# ── Data local (archivos de pacientes) ───────────────────────────────────────
+backend/data/
+
+# ── Node ──────────────────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+node_modules/
+
+# ── Alembic ───────────────────────────────────────────────────────────────────
+# NO ignorar migrations/versions — deben subirse a git
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Docker ───────────────────────────────────────────────────────────────────
+# NO ignorar docker-compose.yml ni docker-compose.prod.yml
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDEs ─────────────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
