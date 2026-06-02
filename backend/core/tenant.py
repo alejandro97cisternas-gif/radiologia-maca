@@ -67,6 +67,8 @@ def _es_ruta_global(path: str) -> bool:
         "/api/auth/admin",
         "/admin",
         "/api/health",
+        "/api/portal/acceder",
+        "/api/portal/solicitar-acceso",
         "/docs",
         "/openapi.json",
         "/redoc",
