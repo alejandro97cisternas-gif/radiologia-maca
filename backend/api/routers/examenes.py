@@ -38,6 +38,7 @@ def listar_tipos(request: Request, db: Session = Depends(get_db)):
 def _serializar(e: Examen, inc_estado: str | None = None) -> dict:
     return {
         "id": e.id,
+        "caso_id": e.caso_id,
         "paciente": e.paciente.nombre_completo,
         "rut": e.paciente.rut,
         "paciente_id": e.paciente_id,
@@ -177,6 +178,77 @@ def descargar_imagenes(examen_id: int, request: Request, db: Session = Depends(g
     return StreamingResponse(
         buf, media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{rut}-{e.tipo_examen}.zip"'},
+    )
+
+
+def _examenes_por_caso(caso_id: str, radiologo_id: int, db: Session) -> list[Examen]:
+    if caso_id.startswith("solo_"):
+        exam_id = int(caso_id[5:])
+        e = _examen_del_tenant(exam_id, radiologo_id, db)
+        return [e]
+    examenes = (db.query(Examen)
+                .join(Derivador, Examen.derivador_id == Derivador.id)
+                .filter(Examen.caso_id == caso_id, Derivador.radiologo_id == radiologo_id)
+                .all())
+    if not examenes:
+        raise HTTPException(404, "Caso no encontrado")
+    return examenes
+
+
+@router.get("/caso/{caso_id}")
+def detalle_caso(caso_id: str, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    radiologo = get_tenant(request)
+    examenes = _examenes_por_caso(caso_id, radiologo.id, db)
+    inc = _inc_map(db, [e.id for e in examenes])
+    return {
+        "examenes": [
+            {
+                **_serializar(e, inc.get(e.id)),
+                "imagenes": [
+                    {"id": img.id, "tipo": img.tipo, "nombre": img.nombre_archivo, "url": get_url(img.ruta)}
+                    for img in e.imagenes
+                ],
+            }
+            for e in examenes
+        ]
+    }
+
+
+@router.patch("/caso/{caso_id}/estado")
+def actualizar_estado_caso(caso_id: str, body: dict, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    estado = body.get("estado")
+    if estado not in ESTADOS_VALIDOS:
+        raise HTTPException(400, f"Estado inválido: {ESTADOS_VALIDOS}")
+    radiologo = get_tenant(request)
+    examenes = _examenes_por_caso(caso_id, radiologo.id, db)
+    now = datetime.now(timezone.utc)
+    for e in examenes:
+        e.estado = estado
+        if estado == "COMPLETADO":
+            e.completado_en = now
+    db.commit()
+    return {"caso_id": caso_id, "estado": estado}
+
+
+@router.get("/caso/{caso_id}/descargar")
+def descargar_caso(caso_id: str, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    radiologo = get_tenant(request)
+    examenes = _examenes_por_caso(caso_id, radiologo.id, db)
+    rut = examenes[0].paciente.rut or f"pac{examenes[0].paciente_id}"
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for examen in examenes:
+            folder = examen.tipo_examen.replace("/", "-")[:40]
+            for img in examen.imagenes:
+                nombre = img.ruta.rsplit("/", 1)[-1]
+                try:
+                    zf.writestr(f"{folder}/{nombre}", get_bytes(img.ruta))
+                except Exception:
+                    pass
+    buf.seek(0)
+    return StreamingResponse(
+        buf, media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{rut}-caso.zip"'},
     )
 
 

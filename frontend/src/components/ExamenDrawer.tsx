@@ -1,193 +1,209 @@
 import { useEffect, useState } from 'react'
-import { Drawer, Descriptions, Tag, Image, Upload, Button, message, Modal, Spin, Empty, Tabs, Badge, Typography } from 'antd'
+import {
+  Drawer, Descriptions, Tag, Image, Upload, Button, message,
+  Modal, Spin, Empty, Tabs, Badge, Typography, Divider,
+} from 'antd'
 import { UploadOutlined, DownloadOutlined, FilePdfOutlined, CheckCircleOutlined } from '@ant-design/icons'
-import type { Examen } from '../api/examenes'
-import { getExamenDetalle, subirInforme, patchEstadoExamen, descargarImagenes } from '../api/examenes'
-import type { ExamenDetalle } from '../api/examenes'
+import type { Caso, ImagenExamen } from '../api/examenes'
+import { getCasoDetalle, subirInforme, patchEstadoCaso, descargarCaso } from '../api/examenes'
 import IncidenciaSection from './IncidenciaSection'
 
+type ExamenConImagenes = {
+  id: number
+  tipo_examen: string
+  estado: string
+  tiene_informe: boolean
+  version: number
+  imagenes: ImagenExamen[]
+}
+
 const ESTADO_COLOR: Record<string, string> = {
-  PENDIENTE: 'orange',
-  EN_PROCESO: 'processing',
-  COMPLETADO: 'success',
+  PENDIENTE: 'orange', EN_PROCESO: 'processing', COMPLETADO: 'success',
 }
 
 interface Props {
-  examen: Examen | null
+  caso: Caso | null
   onClose: () => void
   onUpdate: () => void
 }
 
-export default function ExamenDrawer({ examen, onClose, onUpdate }: Props) {
-  const [detalle, setDetalle] = useState<ExamenDetalle | null>(null)
+export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
+  const [examenes, setExamenes] = useState<ExamenConImagenes[]>([])
   const [loading, setLoading] = useState(false)
-  const [uploading, setUploading] = useState(false)
+  const [uploading, setUploading] = useState<number | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  const resolveUrl = (url: string) => url.startsWith('http') ? url : `${BASE}${url}`
 
   useEffect(() => {
-    if (!examen) { setDetalle(null); return }
+    if (!caso) { setExamenes([]); return }
     setLoading(true)
-    getExamenDetalle(examen.id)
-      .then(async d => {
-        setDetalle(d)
-        // Auto-avanzar PENDIENTE → EN_PROCESO al abrir
-        if (d.estado === 'PENDIENTE') {
-          await patchEstadoExamen(d.id, 'EN_PROCESO')
+    getCasoDetalle(caso.caso_id)
+      .then(async data => {
+        setExamenes(data.examenes as ExamenConImagenes[])
+        if (caso.estado === 'PENDIENTE') {
+          await patchEstadoCaso(caso.caso_id, 'EN_PROCESO')
           onUpdate()
         }
       })
       .finally(() => setLoading(false))
-  }, [examen?.id])
+  }, [caso?.caso_id])
 
   const handleDescargar = async () => {
-    if (!examen) return
+    if (!caso) return
     setDownloading(true)
-    try {
-      await descargarImagenes(examen)
-    } catch {
-      message.error('Error al descargar imágenes')
-    } finally {
-      setDownloading(false)
-    }
+    try { await descargarCaso(caso) }
+    catch { message.error('Error al descargar imágenes') }
+    finally { setDownloading(false) }
   }
 
-  const handleSubirPDF = async (file: File) => {
-    if (!examen) return
-    setUploading(true)
+  const handleSubirPDF = async (examenId: number, file: File) => {
+    setUploading(examenId)
     try {
-      await subirInforme(examen.id, file)
+      await subirInforme(examenId, file)
       onUpdate()
-      onClose()
-      Modal.success({
-        title: 'Informe subido correctamente',
-        content: 'El examen ha pasado a COMPLETADO y se ha notificado al derivador por correo electrónico.',
-        okText: 'Entendido',
-      })
+      // Reload caso detail
+      if (caso) {
+        const data = await getCasoDetalle(caso.caso_id)
+        setExamenes(data.examenes as ExamenConImagenes[])
+        const todosCompletos = (data.examenes as ExamenConImagenes[]).every(e => e.tiene_informe)
+        if (todosCompletos) {
+          onClose()
+          Modal.success({
+            title: 'Todos los informes subidos',
+            content: 'El caso ha pasado a COMPLETADO y se ha notificado al derivador.',
+            okText: 'Entendido',
+          })
+        } else {
+          message.success('Informe subido correctamente')
+        }
+      }
     } catch {
       message.error('Error al subir el informe')
     } finally {
-      setUploading(false)
+      setUploading(null)
     }
     return false
   }
 
-  const imgs2D = detalle?.imagenes.filter(i => i.tipo === '2D') ?? []
-  const imgsDicom = detalle?.imagenes.filter(i => i.tipo === 'DICOM') ?? []
-  const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-  const resolveUrl = (url: string) => url.startsWith('http') ? url : `${BASE}${url}`
+  const todosConInforme = examenes.length > 0 && examenes.every(e => e.tiene_informe)
 
   return (
     <Drawer
-      open={!!examen}
+      open={!!caso}
       onClose={onClose}
-      width={680}
+      width={720}
       extra={
-        examen ? (
-          <Button
-            icon={<DownloadOutlined />}
-            loading={downloading}
-            onClick={handleDescargar}
-            disabled={(detalle?.imagenes.length ?? 0) === 0}
-          >
+        caso ? (
+          <Button icon={<DownloadOutlined />} loading={downloading} onClick={handleDescargar}
+            disabled={(caso.imagenes_count ?? 0) === 0}>
             Descargar imágenes
           </Button>
         ) : null
       }
       title={
-        examen ? (
+        caso ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{
-              width: 4, height: 32, borderRadius: 2,
-              background: examen.derivador_color || '#e2e8f0',
-              flexShrink: 0,
-            }} />
-            <span>{examen.paciente}</span>
-            <Tag color={ESTADO_COLOR[examen.estado]}>{examen.estado}</Tag>
-            <Tag color="blue">{examen.tipo_examen}</Tag>
-            <Tag color={(examen.version ?? 0) === 0 ? 'default' : 'orange'} style={{ fontWeight: 600 }}>
-              v{examen.version ?? 0}
-            </Tag>
+            <div style={{ width: 4, height: 32, borderRadius: 2, background: caso.derivador_color || '#e2e8f0', flexShrink: 0 }} />
+            <span>{caso.paciente}</span>
+            <Tag color={ESTADO_COLOR[caso.estado]}>{caso.estado}</Tag>
           </div>
         ) : null
       }
       footer={
-        !detalle?.tiene_informe ? (
-          <Upload accept=".pdf" showUploadList={false} beforeUpload={handleSubirPDF}>
-            <Button
-              type="primary"
-              icon={<UploadOutlined />}
-              loading={uploading}
-              size="large"
-              block
-            >
-              Subir informe PDF
-            </Button>
-          </Upload>
-        ) : (
+        todosConInforme ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#16a34a', padding: '8px 0' }}>
             <CheckCircleOutlined style={{ fontSize: 18 }} />
-            <Typography.Text style={{ color: '#16a34a', fontWeight: 600 }}>Informe subido</Typography.Text>
+            <Typography.Text style={{ color: '#16a34a', fontWeight: 600 }}>Todos los informes subidos</Typography.Text>
           </div>
-        )
+        ) : null
       }
     >
       {loading ? (
         <div style={{ textAlign: 'center', paddingTop: 60 }}><Spin size="large" /></div>
-      ) : detalle ? (
+      ) : caso && examenes.length > 0 ? (
         <>
           <Descriptions size="small" column={2} style={{ marginBottom: 20 }}>
-            <Descriptions.Item label="Clínica">{detalle.derivador}</Descriptions.Item>
-            <Descriptions.Item label="RUT">{detalle.rut || '—'}</Descriptions.Item>
-            <Descriptions.Item label="Tipo">{detalle.tipo_examen}</Descriptions.Item>
-            <Descriptions.Item label="Ingresado">
-              {new Date(detalle.creado_en).toLocaleDateString('es-CL')}
-            </Descriptions.Item>
+            <Descriptions.Item label="Clínica">{caso.derivador}</Descriptions.Item>
+            <Descriptions.Item label="RUT">{caso.rut || '—'}</Descriptions.Item>
+            <Descriptions.Item label="Ingresado">{new Date(caso.creado_en).toLocaleDateString('es-CL')}</Descriptions.Item>
+            <Descriptions.Item label="Exámenes">{examenes.length}</Descriptions.Item>
           </Descriptions>
 
-          <Tabs items={[
-            {
-              key: '2d',
-              label: <span>Imágenes 2D <Badge count={imgs2D.length} color="#2563EB" /></span>,
-              children: imgs2D.length === 0
-                ? <Empty description="Sin imágenes 2D" imageStyle={{ height: 48 }} />
-                : (
-                  <Image.PreviewGroup>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                      {imgs2D.map(img => (
-                        <div key={img.id}>
-                          <Image
-                            src={resolveUrl(img.url)}
-                            alt={img.nombre}
-                            style={{ width: '100%', height: 120, objectFit: 'cover' }}
-                          />
-                          <Typography.Text style={{ fontSize: 10, color: '#9ca3af', display: 'block', textAlign: 'center', marginTop: 2 }}>
-                            {img.nombre}
-                          </Typography.Text>
+          {examenes.map((examen, idx) => {
+            const imgs2D = examen.imagenes.filter(i => i.tipo === '2D')
+            const imgsDicom = examen.imagenes.filter(i => i.tipo === 'DICOM')
+            return (
+              <div key={examen.id}>
+                {idx > 0 && <Divider style={{ margin: '20px 0' }} />}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <Tag color="blue" style={{ fontWeight: 600 }}>{examen.tipo_examen}</Tag>
+                  <Tag color={ESTADO_COLOR[examen.estado]}>{examen.estado}</Tag>
+                  {(examen.version ?? 0) > 0 && <Tag color="orange">v{examen.version}</Tag>}
+                  {examen.tiene_informe && (
+                    <Tag color="success" icon={<CheckCircleOutlined />}>Informe subido</Tag>
+                  )}
+                </div>
+
+                <Tabs items={[
+                  {
+                    key: `2d-${examen.id}`,
+                    label: <span>Imágenes 2D <Badge count={imgs2D.length} color="#2563EB" /></span>,
+                    children: imgs2D.length === 0
+                      ? <Empty description="Sin imágenes 2D" imageStyle={{ height: 48 }} />
+                      : (
+                        <Image.PreviewGroup>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                            {imgs2D.map(img => (
+                              <div key={img.id}>
+                                <Image src={resolveUrl(img.url)} alt={img.nombre}
+                                  style={{ width: '100%', height: 120, objectFit: 'cover' }} />
+                                <Typography.Text style={{ fontSize: 10, color: '#9ca3af', display: 'block', textAlign: 'center', marginTop: 2 }}>
+                                  {img.nombre}
+                                </Typography.Text>
+                              </div>
+                            ))}
+                          </div>
+                        </Image.PreviewGroup>
+                      ),
+                  },
+                  {
+                    key: `dicom-${examen.id}`,
+                    label: <span>DICOM <Badge count={imgsDicom.length} color="#7c3aed" /></span>,
+                    children: imgsDicom.length === 0
+                      ? <Empty description="Sin archivos DICOM" imageStyle={{ height: 48 }} />
+                      : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {imgsDicom.map(img => (
+                            <div key={img.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: '#f8fafc', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+                              <FilePdfOutlined style={{ color: '#7c3aed', fontSize: 18 }} />
+                              <Typography.Text style={{ fontSize: 13, flex: 1 }}>{img.nombre}</Typography.Text>
+                              <Tag color="purple" style={{ margin: 0 }}>DICOM</Tag>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </Image.PreviewGroup>
-                ),
-            },
-            {
-              key: 'dicom',
-              label: <span>DICOM <Badge count={imgsDicom.length} color="#7c3aed" /></span>,
-              children: imgsDicom.length === 0
-                ? <Empty description="Sin archivos DICOM" imageStyle={{ height: 48 }} />
-                : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {imgsDicom.map(img => (
-                      <div key={img.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: '#f8fafc', borderRadius: 6, border: '1px solid #e2e8f0' }}>
-                        <FilePdfOutlined style={{ color: '#7c3aed', fontSize: 18 }} />
-                        <Typography.Text style={{ fontSize: 13, flex: 1 }}>{img.nombre}</Typography.Text>
-                        <Tag color="purple" style={{ margin: 0 }}>DICOM</Tag>
-                      </div>
-                    ))}
-                  </div>
-                ),
-            },
-          ]} />
-          <IncidenciaSection examenId={detalle.id} />
+                      ),
+                  },
+                ]} />
+
+                {!examen.tiene_informe && (
+                  <Upload accept=".pdf" showUploadList={false} beforeUpload={f => handleSubirPDF(examen.id, f)}>
+                    <Button
+                      type="primary"
+                      icon={<UploadOutlined />}
+                      loading={uploading === examen.id}
+                      style={{ marginTop: 12 }}
+                      block
+                    >
+                      Subir informe — {examen.tipo_examen}
+                    </Button>
+                  </Upload>
+                )}
+
+                <IncidenciaSection examenId={examen.id} />
+              </div>
+            )
+          })}
         </>
       ) : null}
     </Drawer>
