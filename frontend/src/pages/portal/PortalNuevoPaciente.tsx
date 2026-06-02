@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { useTutorialNuevoCaso, reiniciarTutorialNuevoCaso } from '../../hooks/useTutorialDerivador'
 import {
   Steps, Form, Input, Button, Card, DatePicker, Select,
   message, Typography, Tag, Alert, Spin, Progress, Image,
@@ -164,6 +165,7 @@ function CardExamen({
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
         <Select
+          id="selector-tipo"
           placeholder="Tipo de examen…"
           value={card.tipo_examen || undefined}
           onChange={seleccionarTipo}
@@ -300,6 +302,8 @@ export default function PortalNuevoPaciente() {
   // Paso 2 — Notificación
   const [notificado, setNotificado] = useState(false)
 
+  useTutorialNuevoCaso(paso)
+
   // ── Helpers exámenes ──────────────────────────────────────────────────────
 
   const updateCard = useCallback((uid: string, update: Partial<ExamenCard>) => {
@@ -393,9 +397,17 @@ export default function PortalNuevoPaciente() {
     <div style={{ minHeight: '100vh', background: '#f0f4f8', padding: '24px 0' }}>
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px' }}>
 
-        <Typography.Title level={4} style={{ marginBottom: 24, color: '#1e3a5f' }}>
-          Nuevo caso
-        </Typography.Title>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+          <Typography.Title level={4} style={{ margin: 0, color: '#1e3a5f' }}>
+            Nuevo caso
+          </Typography.Title>
+          <Button
+            size="small" type="text"
+            icon={<span style={{ fontSize: 14 }}>?</span>}
+            onClick={() => { reiniciarTutorialNuevoCaso(); window.location.reload() }}
+            title="Ver guía del formulario"
+          />
+        </div>
 
         <Steps
           current={paso}
@@ -410,6 +422,7 @@ export default function PortalNuevoPaciente() {
             <Form form={formPaciente} layout="vertical" onFinish={crearPaciente}>
               <Form.Item name="rut" label="RUT (opcional)">
                 <Input
+                  id="campo-rut"
                   placeholder="12.345.678-9"
                   onChange={e => onRutChange(e.target.value)}
                   suffix={buscandoRut ? <Spin size="small" /> : null}
@@ -433,13 +446,13 @@ export default function PortalNuevoPaciente() {
               )}
 
               <Form.Item name="nombre_completo" label="Nombre completo" rules={[{ required: true }]}>
-                <Input />
+                <Input id="campo-nombre" />
               </Form.Item>
               <Form.Item name="fecha_nacimiento" label="Fecha de nacimiento" rules={[{ required: true }]}>
-                <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+                <DatePicker id="campo-fecha" style={{ width: '100%' }} format="DD/MM/YYYY" />
               </Form.Item>
 
-              <Button type="primary" htmlType="submit" loading={loading} block>
+              <Button id="btn-sig-paciente" type="primary" htmlType="submit" loading={loading} block>
                 {pacienteId ? 'Continuar' : 'Siguiente'}
               </Button>
             </Form>
@@ -465,6 +478,7 @@ export default function PortalNuevoPaciente() {
             </div>
 
             <Button
+              id="btn-agregar-otro"
               type="dashed"
               icon={<PlusOutlined />}
               block
@@ -479,6 +493,7 @@ export default function PortalNuevoPaciente() {
               <Button
                 type="primary"
                 style={{ flex: 1 }}
+                id="btn-sig-examenes"
                 disabled={!puedeNotificar}
                 onClick={() => setPaso(2)}
               >
@@ -527,6 +542,7 @@ export default function PortalNuevoPaciente() {
               Revisa que todo esté correcto. Al notificar, las tareas quedarán asignadas a la doctora.
             </Typography.Text>
             <Button
+              id="btn-notificar-doctora"
               type="primary" size="large" block
               icon={<BellOutlined />}
               loading={loading}
