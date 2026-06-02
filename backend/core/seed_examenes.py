@@ -42,6 +42,24 @@ TIPOS_CEFALOMETRIA = [
 ]
 
 
+TIPOS_CBCT = [
+    ("CBCT-LOC", "3D"),
+    ("CBCT-SUP", "3D"),
+    ("CBCT-INF", "3D"),
+    ("CBCT-BI",  "3D"),
+]
+
+TIPOS_ORTODONCIA = [
+    ("Estudio Ortodoncia", "AMBOS"),
+]
+
+CATALOGO = (
+    [(n, "AMBOS", "Análisis de Cefalometría") for n in TIPOS_CEFALOMETRIA]
+    + [(n, d, "CBCT") for n, d in TIPOS_CBCT]
+    + [(n, d, "Estudio Ortodoncia") for n, d in TIPOS_ORTODONCIA]
+)
+
+
 def seed_tipos_examen(radiologo_id: int, db) -> None:
     """Crea los tipos de examen por defecto para un radiólogo recién creado."""
     from modulos.examenes.models import TipoExamenCustom
@@ -55,11 +73,11 @@ def seed_tipos_examen(radiologo_id: int, db) -> None:
         TipoExamenCustom(
             radiologo_id=radiologo_id,
             nombre=nombre,
-            dimension="AMBOS",
-            categoria="Análisis de Cefalometría",
+            dimension=dimension,
+            categoria=categoria,
             activo=True,
         )
-        for nombre in TIPOS_CEFALOMETRIA
+        for nombre, dimension, categoria in CATALOGO
         if nombre not in existentes
     ]
 

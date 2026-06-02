@@ -16,7 +16,7 @@ import { getDerivadores } from '../api/derivadores'
 import type { Derivador } from '../api/derivadores'
 
 interface TarifaRow { tipo_examen: string; precio: number }
-interface TipoItem { nombre: string; dimension: '2D' | '3D' | 'AMBOS'; custom: boolean }
+interface TipoItem { nombre: string; dimension: '2D' | '3D' | 'AMBOS'; custom: boolean; categoria?: string }
 
 // ── Editor de exámenes + tarifas ──────────────────────────────────────────────
 
@@ -52,19 +52,28 @@ function TarifasEditor({ derivadorId }: { derivadorId: number }) {
   const tipoOptions = useMemo(() => {
     const q = searchText.trim().toUpperCase()
     const dimColor = (d: string) => d === '3D' ? 'purple' : d === 'AMBOS' ? 'geekblue' : 'cyan'
-    const base = allTipos.map(t => ({
-      value: t.nombre,
-      label: (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span>{t.nombre}</span>
-          <Tag color={dimColor(t.dimension)} style={{ margin: 0, fontSize: 10 }}>{t.dimension}</Tag>
-        </div>
-      ),
+    const categorias = [...new Set(allTipos.map(t => t.categoria || 'General'))]
+    const grouped: any[] = categorias.map(cat => ({
+      label: <strong>{cat}</strong>,
+      options: allTipos
+        .filter(t => (t.categoria || 'General') === cat)
+        .map(t => ({
+          value: t.nombre,
+          label: (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>{t.nombre}</span>
+              <Tag color={dimColor(t.dimension)} style={{ margin: 0, fontSize: 10 }}>{t.dimension}</Tag>
+            </div>
+          ),
+        })),
     }))
     if (q && !allTipos.find(t => t.nombre === q)) {
-      base.push({ value: q, label: <span style={{ color: '#2563EB' }}>➕ Crear nuevo: "{q}"</span> as any })
+      grouped.push({
+        label: <strong>Nuevo</strong>,
+        options: [{ value: q, label: <span style={{ color: '#2563EB' }}>➕ Crear nuevo: "{q}"</span> }],
+      })
     }
-    return base
+    return grouped
   }, [allTipos, searchText])
 
   const handleAgregar = async (values: { tipo_examen: string; precio: number; dimension?: string }) => {

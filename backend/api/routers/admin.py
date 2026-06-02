@@ -114,6 +114,16 @@ def actualizar_radiologo(id: int, body: RadiologoUpdate, db: Session = Depends(g
     return {"id": radiologo.id, "slug": radiologo.slug, "activo": radiologo.activo}
 
 
+@router.post("/reseed-tipos")
+def reseed_tipos_examen(db: Session = Depends(get_db), _=Depends(get_superadmin)):
+    """Agrega tipos de examen faltantes a todos los radiólogos existentes."""
+    from core.seed_examenes import seed_tipos_examen
+    radiologos = db.query(Usuario).filter(Usuario.rol == "radiologo", Usuario.activo == True).all()
+    for r in radiologos:
+        seed_tipos_examen(r.id, db)
+    return {"ok": True, "radiologos": len(radiologos)}
+
+
 @router.post("/radiologos/{id}/reset-password")
 def reset_password(id: int, body: dict, db: Session = Depends(get_db), _=Depends(get_superadmin)):
     nueva = body.get("password", "")
