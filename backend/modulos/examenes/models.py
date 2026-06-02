@@ -62,5 +62,6 @@ class TipoExamenCustom(Base):
     radiologo_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     nombre = Column(String, nullable=False)
     dimension = Column(String, nullable=False, default="2D")  # 2D | 3D | AMBOS
+    categoria = Column(String, nullable=True)
     activo = Column(Boolean, default=True)
     creado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc))

@@ -14,11 +14,10 @@ import {
   portalGetTipos,
 } from '../../api/portal'
 
-interface TipoExamen { nombre: string; dimension: '2D' | '3D' | 'AMBOS'; custom: boolean }
+interface TipoExamen { nombre: string; dimension: '2D' | '3D' | 'AMBOS'; categoria?: string; custom: boolean }
 
-const _TIPOS_3D_BASE = new Set(['CBCT-LOC', 'CBCT-SUP', 'CBCT-INF', 'CBCT-BI', 'CBCT-STE', 'CBCT-ATM'])
 const dimension = (tipo: string, tiposMap?: Map<string, '2D' | '3D' | 'AMBOS'>): '2D' | '3D' | 'AMBOS' =>
-  tiposMap?.get(tipo) ?? (_TIPOS_3D_BASE.has(tipo) ? '3D' : '2D')
+  tiposMap?.get(tipo) ?? '2D'
 
 const BIMAXILAR = 'CBCT-BI'
 
@@ -171,15 +170,20 @@ function CardExamen({
           onChange={seleccionarTipo}
           loading={card.creando}
           disabled={!!card.tipo_examen}
+          showSearch
+          filterOption={(input, option) =>
+            String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+          }
           style={{ flex: 1 }}
-          options={[
-            { label: '2D', options: tipos.filter(t => t.dimension === '2D').map(t => ({ value: t.nombre, label: t.nombre })) },
-            { label: '3D (CBCT)', options: tipos.filter(t => t.dimension === '3D').map(t => ({ value: t.nombre, label: t.nombre })) },
-            ...(tipos.some(t => t.dimension === 'AMBOS') ? [{
-              label: '2D + 3D',
-              options: tipos.filter(t => t.dimension === 'AMBOS').map(t => ({ value: t.nombre, label: t.nombre })),
-            }] : []),
-          ]}
+          options={(() => {
+            const categorias = [...new Set(tipos.map(t => t.categoria || 'General'))]
+            return categorias.map(cat => ({
+              label: cat,
+              options: tipos
+                .filter(t => (t.categoria || 'General') === cat)
+                .map(t => ({ value: t.nombre, label: t.nombre })),
+            }))
+          })()}
         />
         {card.tipo_examen && dim === 'AMBOS' && (
           <>

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from core.database import get_db
 from core.dependencies import get_current_user
 from core.tenant import get_tenant
-from core.storage import guardar_informe_pdf, get_url, get_bytes, EXAMENES_3D
+from core.storage import guardar_informe_pdf, get_url, get_bytes
 from core.email_service import enviar_informe_listo_a_derivador
 from core.config import settings
 from modulos.examenes.models import Examen, TipoExamenCustom
@@ -20,27 +20,19 @@ from modulos.derivadores.models import Derivador
 router = APIRouter(prefix="/api/examenes", tags=["examenes"])
 
 ESTADOS_VALIDOS = ["PENDIENTE", "EN_PROCESO", "COMPLETADO"]
-_TIPOS_3D = EXAMENES_3D
-
-TIPOS_EXAMEN_BASE = [
-    "PANO", "CBCT-LOC", "CBCT-SUP", "CBCT-INF", "CBCT-BI",
-    "RETRO", "BW-UNI", "BW-BIL", "TELE-L", "ORTO",
-]
 
 
 @router.get("/tipos")
 def listar_tipos(request: Request, db: Session = Depends(get_db)):
     radiologo = get_tenant(request)
-    custom = db.query(TipoExamenCustom).filter(
+    tipos = db.query(TipoExamenCustom).filter(
         TipoExamenCustom.radiologo_id == radiologo.id,
         TipoExamenCustom.activo == True,
-    ).all()
-    base = [
-        {"nombre": t, "dimension": "3D" if t in _TIPOS_3D else "2D", "custom": False}
-        for t in TIPOS_EXAMEN_BASE
+    ).order_by(TipoExamenCustom.categoria, TipoExamenCustom.nombre).all()
+    return [
+        {"id": t.id, "nombre": t.nombre, "dimension": t.dimension, "categoria": t.categoria, "custom": True}
+        for t in tipos
     ]
-    extra = [{"id": c.id, "nombre": c.nombre, "dimension": c.dimension, "custom": True} for c in custom]
-    return base + extra
 
 
 def _serializar(e: Examen, inc_estado: str | None = None) -> dict:

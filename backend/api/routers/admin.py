@@ -83,6 +83,10 @@ def crear_radiologo(body: RadiologoCreate, db: Session = Depends(get_db), _=Depe
     db.add(radiologo)
     db.commit()
     db.refresh(radiologo)
+
+    from core.seed_examenes import seed_tipos_examen
+    seed_tipos_examen(radiologo.id, db)
+
     return {"id": radiologo.id, "username": radiologo.username, "slug": radiologo.slug, "nombre_display": radiologo.nombre_display}
 
 

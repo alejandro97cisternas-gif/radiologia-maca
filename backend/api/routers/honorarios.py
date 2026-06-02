@@ -13,10 +13,7 @@ from modulos.examenes.models import Examen, TipoExamenCustom
 from modulos.tarifas.models import TarifaDerivador
 from modulos.honorarios.models import Honorario
 
-_TIPOS_BASE = {
-    "PANO", "CBCT-LOC", "CBCT-SUP", "CBCT-INF", "CBCT-BI",
-    "RETRO", "BW-UNI", "BW-BIL", "TELE-L", "ORTO",
-}
+_TIPOS_BASE: set[str] = set()  # sin tipos hardcodeados — todos son custom por radiologo
 
 router = APIRouter(prefix="/api/honorarios", tags=["honorarios"])
 
@@ -112,6 +109,7 @@ def enviar(derivador_id: int, request: Request, periodo: str = Query(...), db: S
 class TipoExamenCreate(BaseModel):
     nombre: str
     dimension: str
+    categoria: str | None = None
 
 
 @router.post("/tipos-examen", status_code=201)
@@ -130,18 +128,18 @@ def crear_tipo_examen(body: TipoExamenCreate, request: Request, db: Session = De
             db.commit()
             return {"id": existing.id, "nombre": existing.nombre, "dimension": existing.dimension, "custom": True}
         raise HTTPException(409, "Este tipo ya existe")
-    nuevo = TipoExamenCustom(radiologo_id=radiologo.id, nombre=nombre, dimension=body.dimension)
+    nuevo = TipoExamenCustom(radiologo_id=radiologo.id, nombre=nombre, dimension=body.dimension, categoria=body.categoria)
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
-    return {"id": nuevo.id, "nombre": nuevo.nombre, "dimension": nuevo.dimension, "custom": True}
+    return {"id": nuevo.id, "nombre": nuevo.nombre, "dimension": nuevo.dimension, "categoria": nuevo.categoria, "custom": True}
 
 
 @router.get("/tipos-examen")
 def listar_todos_tipos(request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
     radiologo = get_tenant(request)
-    tipos = db.query(TipoExamenCustom).filter(TipoExamenCustom.radiologo_id == radiologo.id).order_by(TipoExamenCustom.creado_en).all()
-    return [{"id": t.id, "nombre": t.nombre, "dimension": t.dimension, "activo": t.activo} for t in tipos]
+    tipos = db.query(TipoExamenCustom).filter(TipoExamenCustom.radiologo_id == radiologo.id).order_by(TipoExamenCustom.categoria, TipoExamenCustom.nombre).all()
+    return [{"id": t.id, "nombre": t.nombre, "dimension": t.dimension, "categoria": t.categoria, "activo": t.activo} for t in tipos]
 
 
 @router.patch("/tipos-examen/{tipo_id}")
