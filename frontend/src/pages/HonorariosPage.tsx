@@ -55,11 +55,11 @@ function TarifasEditor({ derivadorId }: { derivadorId: number }) {
   const tipoOptions = useMemo(() => {
     const q = searchText.trim().toUpperCase()
     const dimColor = (d: string) => d === '3D' ? 'purple' : d === 'AMBOS' ? 'geekblue' : 'cyan'
-    const categorias = [...new Set(allTipos.map(t => t.categoria || 'General'))]
+    const categorias = [...new Set(allTipos.map(t => t.categoria).filter(Boolean))]
     const grouped: any[] = categorias.map(cat => ({
       label: <strong>{cat}</strong>,
       options: allTipos
-        .filter(t => (t.categoria || 'General') === cat)
+        .filter(t => t.categoria === cat)
         .map(t => ({
           value: t.nombre,
           label: (
@@ -102,19 +102,19 @@ function TarifasEditor({ derivadorId }: { derivadorId: number }) {
 
   const categoriaOptions = useMemo(() => {
     const conteo = allTipos.reduce<Record<string, number>>((acc, t) => {
-      const c = t.categoria || 'General'
+      const c = t.categoria
       acc[c] = (acc[c] || 0) + 1
       return acc
     }, {})
     return Object.entries(conteo)
-      .filter(([, n]) => n > 1)
+      .filter(([c, n]) => n > 1 && c !== 'undefined')
       .map(([c]) => ({ value: c, label: c }))
   }, [allTipos])
 
   const examenesFaltantesCat = useMemo(() => {
     if (!catSeleccionada) return []
     return allTipos.filter(t =>
-      (t.categoria || 'General') === catSeleccionada &&
+      t.categoria === catSeleccionada &&
       !tarifas.find(tar => tar.tipo_examen === t.nombre)
     )
   }, [catSeleccionada, allTipos, tarifas])
