@@ -1,23 +1,12 @@
-
-import ssl
-import time
-import smtplib
-from email import encoders
-from email.mime.base import MIMEBase
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 import logging
-
-from core import config
+import resend
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 
-_MAX_INTENTOS = 3
-_BACKOFF_BASE = 2
 
-
-def smtp_configurado() -> bool:
-    return bool(config.SMTP_USER and config.SMTP_PASSWORD)
+def email_configurado() -> bool:
+    return bool(settings.RESEND_API_KEY)
 
 
 def _html(body: str) -> str:
@@ -87,37 +76,31 @@ def _p(text: str) -> str:
 
 def _send(to: str, subject: str, html: str,
           attachments: list[tuple[str, bytes, str]] | None = None) -> tuple[bool, str]:
-    if not smtp_configurado():
-        return False, "SMTP no configurado."
+    if not email_configurado():
+        return False, "Resend no configurado (falta RESEND_API_KEY)."
 
-    msg = MIMEMultipart("mixed")
-    msg["From"] = config.SMTP_FROM
-    msg["To"] = to
-    msg["Subject"] = subject
-    msg.attach(MIMEText(html, "html", "utf-8"))
-    for mime_type, data, filename in (attachments or []):
-        main, sub = mime_type.split("/", 1)
-        part = MIMEBase(main, sub)
-        part.set_payload(data)
-        encoders.encode_base64(part)
-        part.add_header("Content-Disposition", f'attachment; filename="{filename}"')
-        msg.attach(part)
+    resend.api_key = settings.RESEND_API_KEY
+    params: resend.Emails.SendParams = {
+        "from": settings.EMAIL_FROM,
+        "to": [to],
+        "subject": subject,
+        "html": html,
+    }
+    if attachments:
+        params["attachments"] = [
+            {"filename": filename, "content": list(data)}
+            for _, data, filename in attachments
+        ]
+    try:
+        resend.Emails.send(params)
+        return True, f"Enviado a {to}"
+    except Exception as e:
+        logger.error("Resend error: %s", e)
+        return False, str(e)
 
-    ultimo_error = ""
-    for intento in range(1, _MAX_INTENTOS + 1):
-        try:
-            ctx = ssl.create_default_context()
-            with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=15) as s:
-                s.ehlo(); s.starttls(context=ctx)
-                s.login(config.SMTP_USER, config.SMTP_PASSWORD)
-                s.sendmail(config.SMTP_FROM, [to], msg.as_string())
-            return True, f"Enviado a {to}"
-        except Exception as e:
-            ultimo_error = str(e)
-            if intento < _MAX_INTENTOS:
-                time.sleep(_BACKOFF_BASE ** (intento - 1))
 
-    return False, f"Error tras {_MAX_INTENTOS} intentos: {ultimo_error}"
+# Alias para no romper código existente que llame smtp_configurado()
+smtp_configurado = email_configurado
 
 
 def enviar_magic_link_portal(derivador, link: str, radiologo_nombre: str = "Radiología") -> tuple[bool, str]:

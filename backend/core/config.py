@@ -13,11 +13,8 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:5173"
     BASE_DOMAIN: str = "localhost"  # tudominio.com en producción
 
-    SMTP_HOST: str = "smtp.gmail.com"
-    SMTP_PORT: int = 587
-    SMTP_USER: str = ""
-    SMTP_PASSWORD: str = ""
-    SMTP_FROM: str = ""
+    RESEND_API_KEY: str = ""
+    EMAIL_FROM: str = "Radiología Maca <notificaciones@novex.cloud>"
 
     STORAGE_ROOT: str = "data"
 
@@ -39,10 +36,4 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# Compat layer para email_service.py
-SMTP_HOST = settings.SMTP_HOST
-SMTP_PORT = settings.SMTP_PORT
-SMTP_USER = settings.SMTP_USER
-SMTP_PASSWORD = settings.SMTP_PASSWORD
-SMTP_FROM = settings.SMTP_FROM or settings.SMTP_USER
 APP_URL = settings.APP_URL

@@ -1,12 +1,13 @@
 import { ReactNode } from 'react'
 import { Layout, Menu, Button } from 'antd'
+import novexLogo from '/logonovex_t.png'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { CalendarOutlined, TeamOutlined, DollarOutlined, LogoutOutlined, QuestionCircleOutlined } from '@ant-design/icons'
 import { useAuth } from '../context/AuthContext'
 import NotificacionesBell from './NotificacionesBell'
 import { reiniciarTutorialDoctora } from '../hooks/useTutorialDoctora'
 
-const { Sider, Content, Header } = Layout
+const { Sider, Content, Header, Footer } = Layout
 
 export default function AppLayout({ children, noPadding }: { children: ReactNode; noPadding?: boolean }) {
   const navigate = useNavigate()
@@ -52,11 +53,25 @@ export default function AppLayout({ children, noPadding }: { children: ReactNode
           background: '#f8fafc',
           display: 'flex',
           flexDirection: 'column',
-          height: 'calc(100vh - 64px)',
+          height: 'calc(100vh - 64px - 36px)',
           overflow: 'auto',
         }}>
           {children}
         </Content>
+        <Footer style={{
+          height: 36,
+          padding: '0 24px',
+          background: '#fff',
+          borderTop: '1px solid #e5e7eb',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+        }}>
+          <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.2em', color: '#9CA3AF', fontWeight: 500 }}>Crafted by</span>
+          <img src={novexLogo} alt="Novex" style={{ height: 16, width: 'auto' }} />
+          <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.2em', color: '#9CA3AF', fontWeight: 700 }}>Novex</span>
+        </Footer>
       </Layout>
     </Layout>
   )
