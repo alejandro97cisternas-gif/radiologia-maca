@@ -16,6 +16,7 @@ export function useTutorialDerivador(skip = false) {
         prevBtnText: '← Anterior',
         doneBtnText: 'Entendido ✓',
         progressText: '{{current}} de {{total}}',
+        allowClose: false,
         onDestroyed: () => localStorage.setItem(STORAGE_KEY, '1'),
         steps: [
           {
@@ -193,6 +194,7 @@ export function useTutorialNuevoCaso(paso: number) {
         nextBtnText: 'Siguiente →',
         prevBtnText: '← Anterior',
         doneBtnText: 'Entendido ✓',
+        allowClose: false,
         onDestroyed: () => localStorage.setItem(config.key, '1'),
         steps: config.steps,
       })
