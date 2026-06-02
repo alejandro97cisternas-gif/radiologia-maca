@@ -74,6 +74,7 @@ export default function ExamenDrawer({ examen, onClose, onUpdate }: Props) {
   const imgs2D = detalle?.imagenes.filter(i => i.tipo === '2D') ?? []
   const imgsDicom = detalle?.imagenes.filter(i => i.tipo === 'DICOM') ?? []
   const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  const resolveUrl = (url: string) => url.startsWith('http') ? url : `${BASE}${url}`
 
   return (
     <Drawer
@@ -155,7 +156,7 @@ export default function ExamenDrawer({ examen, onClose, onUpdate }: Props) {
                       {imgs2D.map(img => (
                         <div key={img.id}>
                           <Image
-                            src={`${BASE}${img.url}`}
+                            src={resolveUrl(img.url)}
                             alt={img.nombre}
                             style={{ width: '100%', height: 120, objectFit: 'cover' }}
                           />
