@@ -32,3 +32,11 @@ export const crearTarifaItem = (derivadorId: number, body: { tipo_examen: string
 
 export const eliminarTarifaItem = (derivadorId: number, tipoExamen: string) =>
   api.delete(`/api/honorarios/${derivadorId}/tarifas/${encodeURIComponent(tipoExamen)}`)
+
+export interface ConvenioItem { id: number; categoria: string; descuento_2: number; descuento_3: number }
+export const getConvenios = (derivadorId: number) =>
+  api.get(`/api/honorarios/${derivadorId}/convenios`).then(r => r.data as ConvenioItem[])
+export const crearConvenio = (derivadorId: number, body: { categoria: string; descuento_2: number; descuento_3: number }) =>
+  api.post(`/api/honorarios/${derivadorId}/convenios`, body).then(r => r.data as ConvenioItem)
+export const eliminarConvenio = (derivadorId: number, convenioId: number) =>
+  api.delete(`/api/honorarios/${derivadorId}/convenios/${convenioId}`)

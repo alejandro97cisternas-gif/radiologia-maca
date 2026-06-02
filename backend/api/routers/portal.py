@@ -169,6 +169,7 @@ def crear_paciente(body: PacienteCreate, derivador: Derivador = Depends(get_port
 class ExamenCreate(BaseModel):
     paciente_id: int
     tipo_examen: str
+    caso_id: str | None = None
 
 
 @router.get("/examenes")
@@ -211,6 +212,7 @@ def crear_examen(body: ExamenCreate, derivador: Derivador = Depends(get_portal_d
         paciente_id=body.paciente_id,
         derivador_id=derivador.id,
         tipo_examen=body.tipo_examen,
+        caso_id=body.caso_id,
     )
     db.add(examen)
     db.commit()

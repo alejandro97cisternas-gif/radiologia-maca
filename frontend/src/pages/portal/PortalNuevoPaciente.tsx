@@ -97,10 +97,11 @@ function ListaArchivos({ archivos }: { archivos: ArchivoSubida[] }) {
 // ── Componente card de un examen ──────────────────────────────────────────────
 
 function CardExamen({
-  card, pacienteId, puedeEliminar, onChange, onDelete, tipos, tiposMap,
+  card, pacienteId, casoId, puedeEliminar, onChange, onDelete, tipos, tiposMap,
 }: {
   card: ExamenCard
   pacienteId: number
+  casoId: string
   puedeEliminar: boolean
   onChange: (uid: string, update: Partial<ExamenCard>) => void
   onDelete: (uid: string) => void
@@ -113,7 +114,7 @@ function CardExamen({
   const seleccionarTipo = async (tipo: string) => {
     onChange(card.uid, { tipo_examen: tipo, creando: true })
     try {
-      const e = await portalCrearExamen({ paciente_id: pacienteId, tipo_examen: tipo })
+      const e = await portalCrearExamen({ paciente_id: pacienteId, tipo_examen: tipo, caso_id: casoId })
       onChange(card.uid, { examen_id: e.id, creando: false })
     } catch {
       message.error('Error al crear el examen')
@@ -299,6 +300,7 @@ export default function PortalNuevoPaciente() {
   const rutTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Paso 1 — Exámenes
+  const [casoId] = useState(() => crypto.randomUUID())
   const [examenes, setExamenes] = useState<ExamenCard[]>([
     { uid: crypto.randomUUID(), tipo_examen: '', examen_id: null, archivos: [], creando: false },
   ])
@@ -472,6 +474,7 @@ export default function PortalNuevoPaciente() {
                   key={card.uid}
                   card={card}
                   pacienteId={pacienteId}
+                  casoId={casoId}
                   puedeEliminar={true}
                   onChange={updateCard}
                   onDelete={deleteCard}

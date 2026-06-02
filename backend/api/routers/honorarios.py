@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from core.database import get_db
@@ -12,13 +13,14 @@ from modulos.derivadores.models import Derivador
 from modulos.examenes.models import Examen, TipoExamenCustom
 from modulos.tarifas.models import TarifaDerivador
 from modulos.honorarios.models import Honorario
+from modulos.convenios.models import Convenio
 
 _TIPOS_BASE: set[str] = set()  # sin tipos hardcodeados — todos son custom por radiologo
 
 router = APIRouter(prefix="/api/honorarios", tags=["honorarios"])
 
 
-def _calcular_detalle(derivador_id: int, periodo: str, db: Session) -> tuple[int, list]:
+def _calcular_detalle(derivador_id: int, periodo: str, db: Session, radiologo_id: int) -> tuple[int, list]:
     anio, mes = periodo.split("-")
     inicio = datetime(int(anio), int(mes), 1, tzinfo=timezone.utc)
     fin = datetime(int(anio) + 1, 1, 1, tzinfo=timezone.utc) if int(mes) == 12 else datetime(int(anio), int(mes) + 1, 1, tzinfo=timezone.utc)
@@ -28,11 +30,44 @@ def _calcular_detalle(derivador_id: int, periodo: str, db: Session) -> tuple[int
                         Examen.completado_en >= inicio, Examen.completado_en < fin).all())
     tarifas = {t.tipo_examen: int(t.precio) for t in db.query(TarifaDerivador).filter(TarifaDerivador.derivador_id == derivador_id).all()}
 
-    detalle, total = [], 0
+    convenios = {
+        c.categoria: c
+        for c in db.query(Convenio).filter(
+            Convenio.radiologo_id == radiologo_id,
+            or_(Convenio.derivador_id == derivador_id, Convenio.derivador_id == None),
+            Convenio.activo == True,
+        ).all()
+    }
+    cat_map = {t.nombre: t.categoria for t in db.query(TipoExamenCustom).filter(TipoExamenCustom.radiologo_id == radiologo_id).all()}
+
+    casos: dict[str, list] = {}
     for e in examenes:
-        precio = tarifas.get(e.tipo_examen, 0)
-        total += precio
-        detalle.append({"examen_id": e.id, "paciente": e.paciente.nombre_completo, "tipo_examen": e.tipo_examen, "fecha": e.completado_en.strftime("%Y-%m-%d"), "precio": precio})
+        key = e.caso_id or f"__solo_{e.id}__"
+        casos.setdefault(key, []).append(e)
+
+    detalle, total = [], 0
+    for caso_examenes in casos.values():
+        cat_count: dict[str, int] = {}
+        for e in sorted(caso_examenes, key=lambda x: x.id):
+            precio_base = tarifas.get(e.tipo_examen, 0)
+            cat = cat_map.get(e.tipo_examen)
+            descuento = 0
+            if cat and cat in convenios:
+                conv = convenios[cat]
+                cat_count[cat] = cat_count.get(cat, 0) + 1
+                pos = cat_count[cat]
+                if pos == 2:
+                    descuento = int(conv.descuento_2)
+                elif pos >= 3:
+                    descuento = int(conv.descuento_3)
+            precio = max(0, precio_base - descuento)
+            total += precio
+            detalle.append({
+                "examen_id": e.id, "paciente": e.paciente.nombre_completo,
+                "tipo_examen": e.tipo_examen, "fecha": e.completado_en.strftime("%Y-%m-%d"),
+                "precio": precio, "precio_base": precio_base, "descuento": descuento,
+                "caso_id": e.caso_id,
+            })
 
     return total, detalle
 
@@ -65,7 +100,7 @@ def resumen_global(request: Request, db: Session = Depends(get_db), _=Depends(ge
 def detalle_derivador(derivador_id: int, request: Request, periodo: str = Query(...), db: Session = Depends(get_db), _=Depends(get_current_user)):
     radiologo = get_tenant(request)
     derivador = _derivador_del_tenant(derivador_id, radiologo.id, db)
-    total, detalle = _calcular_detalle(derivador_id, periodo, db)
+    total, detalle = _calcular_detalle(derivador_id, periodo, db, radiologo.id)
     honorario = db.query(Honorario).filter(Honorario.derivador_id == derivador_id, Honorario.periodo == periodo).first()
     return {"derivador": derivador.nombre, "periodo": periodo, "total": total, "estado": honorario.estado if honorario else "SIN_GENERAR", "detalle": detalle}
 
@@ -74,7 +109,7 @@ def detalle_derivador(derivador_id: int, request: Request, periodo: str = Query(
 def generar(derivador_id: int, request: Request, periodo: str = Query(...), db: Session = Depends(get_db), _=Depends(get_current_user)):
     radiologo = get_tenant(request)
     _derivador_del_tenant(derivador_id, radiologo.id, db)
-    total, detalle = _calcular_detalle(derivador_id, periodo, db)
+    total, detalle = _calcular_detalle(derivador_id, periodo, db, radiologo.id)
     honorario = db.query(Honorario).filter(Honorario.derivador_id == derivador_id, Honorario.periodo == periodo).first()
     if honorario:
         honorario.total = total
@@ -202,13 +237,66 @@ def eliminar_tarifa_item(derivador_id: int, tipo_examen: str, request: Request, 
     db.commit()
 
 
+# ── Convenios ────────────────────────────────────────────────────────────────
+
+class ConvenioCreate(BaseModel):
+    categoria: str
+    descuento_2: int = 0
+    descuento_3: int = 0
+
+
+@router.get("/{derivador_id}/convenios")
+def listar_convenios(derivador_id: int, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    radiologo = get_tenant(request)
+    _derivador_del_tenant(derivador_id, radiologo.id, db)
+    convs = db.query(Convenio).filter(
+        Convenio.radiologo_id == radiologo.id,
+        or_(Convenio.derivador_id == derivador_id, Convenio.derivador_id == None),
+        Convenio.activo == True,
+    ).all()
+    return [{"id": c.id, "categoria": c.categoria, "descuento_2": int(c.descuento_2), "descuento_3": int(c.descuento_3)} for c in convs]
+
+
+@router.post("/{derivador_id}/convenios", status_code=201)
+def crear_convenio(derivador_id: int, body: ConvenioCreate, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    radiologo = get_tenant(request)
+    _derivador_del_tenant(derivador_id, radiologo.id, db)
+    existing = db.query(Convenio).filter(
+        Convenio.radiologo_id == radiologo.id,
+        Convenio.derivador_id == derivador_id,
+        Convenio.categoria == body.categoria,
+        Convenio.activo == True,
+    ).first()
+    if existing:
+        existing.descuento_2 = body.descuento_2
+        existing.descuento_3 = body.descuento_3
+        db.commit()
+        return {"id": existing.id, "categoria": existing.categoria, "descuento_2": int(existing.descuento_2), "descuento_3": int(existing.descuento_3)}
+    conv = Convenio(radiologo_id=radiologo.id, derivador_id=derivador_id, categoria=body.categoria, descuento_2=body.descuento_2, descuento_3=body.descuento_3)
+    db.add(conv)
+    db.commit()
+    db.refresh(conv)
+    return {"id": conv.id, "categoria": conv.categoria, "descuento_2": int(conv.descuento_2), "descuento_3": int(conv.descuento_3)}
+
+
+@router.delete("/{derivador_id}/convenios/{convenio_id}", status_code=204)
+def eliminar_convenio(derivador_id: int, convenio_id: int, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    radiologo = get_tenant(request)
+    _derivador_del_tenant(derivador_id, radiologo.id, db)
+    conv = db.query(Convenio).filter(Convenio.id == convenio_id, Convenio.radiologo_id == radiologo.id).first()
+    if not conv:
+        raise HTTPException(404, "Convenio no encontrado")
+    conv.activo = False
+    db.commit()
+
+
 # ── Preview PDF ───────────────────────────────────────────────────────────────
 
 @router.get("/{derivador_id}/preview")
 def preview_pdf(derivador_id: int, request: Request, periodo: str = Query(...), db: Session = Depends(get_db), _=Depends(get_current_user)):
     radiologo = get_tenant(request)
     derivador = _derivador_del_tenant(derivador_id, radiologo.id, db)
-    total, detalle = _calcular_detalle(derivador_id, periodo, db)
+    total, detalle = _calcular_detalle(derivador_id, periodo, db, radiologo.id)
     honorario = db.query(Honorario).filter(Honorario.derivador_id == derivador_id, Honorario.periodo == periodo).first()
 
     class _Doc:

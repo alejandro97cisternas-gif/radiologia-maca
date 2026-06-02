@@ -20,7 +20,7 @@ export const portalCrearPaciente = (body: { nombre_completo: string; rut?: strin
 
 // Exámenes
 export const portalGetExamenes = () => portalApi.get('/api/portal/examenes').then(r => r.data)
-export const portalCrearExamen = (body: { paciente_id: number; tipo_examen: string }) =>
+export const portalCrearExamen = (body: { paciente_id: number; tipo_examen: string; caso_id?: string }) =>
   portalApi.post('/api/portal/examenes', body).then(r => r.data)
 
 // Tipos de examen disponibles (base + custom)

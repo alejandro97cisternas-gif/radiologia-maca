@@ -13,6 +13,7 @@ class Examen(Base):
     paciente_id = Column(Integer, ForeignKey("pacientes.id"), nullable=False)
     derivador_id = Column(Integer, ForeignKey("derivadores.id"), nullable=False)
     tipo_examen = Column(String, nullable=False)
+    caso_id = Column(String, nullable=True, index=True)
     estado = Column(String, default="BORRADOR")
     version = Column(Integer, default=0, server_default="0")
     notificacion_doctora_enviada = Column(Boolean, default=False)

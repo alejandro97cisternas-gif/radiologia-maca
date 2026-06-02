@@ -11,7 +11,9 @@ import {
   enviarHonorarios, previewHonorarios,
   getTarifas, crearTarifaItem, eliminarTarifaItem,
   getTiposExamen,
+  getConvenios, crearConvenio, eliminarConvenio,
 } from '../api/honorarios'
+import type { ConvenioItem } from '../api/honorarios'
 import { getDerivadores } from '../api/derivadores'
 import type { Derivador } from '../api/derivadores'
 
@@ -302,6 +304,100 @@ function TarifasEditor({ derivadorId }: { derivadorId: number }) {
   )
 }
 
+// ── Editor de convenios ───────────────────────────────────────────────────────
+
+function ConveniosEditor({ derivadorId }: { derivadorId: number }) {
+  const [convenios, setConvenios] = useState<ConvenioItem[]>([])
+  const [tipos, setTipos] = useState<TipoItem[]>([])
+  const [modalOpen, setModalOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form] = Form.useForm()
+
+  const categorias = useMemo(() =>
+    [...new Set(tipos.map(t => t.categoria).filter(Boolean))].map(c => ({ value: c, label: c }))
+  , [tipos])
+
+  const cargar = () => getConvenios(derivadorId).then(setConvenios)
+  useEffect(() => {
+    cargar()
+    getTiposExamen().then(setTipos)
+  }, [derivadorId])
+
+  const handleGuardar = async (values: { categoria: string; descuento_2: number; descuento_3: number }) => {
+    setSaving(true)
+    try {
+      await crearConvenio(derivadorId, values)
+      message.success('Convenio guardado')
+      setModalOpen(false)
+      form.resetFields()
+      cargar()
+    } catch {
+      message.error('Error al guardar')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleEliminar = async (id: number) => {
+    await eliminarConvenio(derivadorId, id)
+    cargar()
+  }
+
+  const columns = [
+    { title: 'Categoría', dataIndex: 'categoria', key: 'categoria' },
+    {
+      title: '2° examen', dataIndex: 'descuento_2', key: 'd2',
+      render: (v: number) => v ? <Tag color="orange">-${v.toLocaleString('es-CL')}</Tag> : <Tag>Sin descuento</Tag>,
+    },
+    {
+      title: '3°+ examen', dataIndex: 'descuento_3', key: 'd3',
+      render: (v: number) => v ? <Tag color="red">-${v.toLocaleString('es-CL')}</Tag> : <Tag>Sin descuento</Tag>,
+    },
+    {
+      title: '', key: 'accion',
+      render: (_: any, r: ConvenioItem) => (
+        <Popconfirm title="¿Eliminar convenio?" okText="Eliminar" okButtonProps={{ danger: true }} cancelText="Cancelar" onConfirm={() => handleEliminar(r.id)}>
+          <Button size="small" danger type="text" icon={<DeleteOutlined />} />
+        </Popconfirm>
+      ),
+    },
+  ]
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {convenios.length === 0 ? 'Sin convenios configurados.' : `${convenios.length} convenio${convenios.length !== 1 ? 's' : ''}`}
+        </Typography.Text>
+        <Button icon={<PlusOutlined />} size="small" onClick={() => setModalOpen(true)}>Agregar convenio</Button>
+      </div>
+
+      {convenios.length > 0 && (
+        <Table dataSource={convenios} columns={columns} rowKey="id" pagination={false} size="small" style={{ maxWidth: 520 }} />
+      )}
+
+      <Modal title="Configurar convenio" open={modalOpen} onCancel={() => { setModalOpen(false); form.resetFields() }} onOk={() => form.submit()} okText="Guardar" confirmLoading={saving}>
+        <Form form={form} layout="vertical" onFinish={handleGuardar} style={{ marginTop: 16 }}>
+          <Form.Item name="categoria" label="Categoría" rules={[{ required: true }]}
+            extra="Si ya existe un convenio para esta categoría, se actualizará.">
+            <Select options={categorias} placeholder="Selecciona categoría" />
+          </Form.Item>
+          <Form.Item name="descuento_2" label="Descuento en el 2° examen (CLP)" initialValue={0} rules={[{ required: true }]}>
+            <InputNumber min={0} step={1000} style={{ width: '100%' }}
+              formatter={v => `$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+              parser={v => Number(v?.replace(/\$\s?|(\.)*/g, '') || 0)} />
+          </Form.Item>
+          <Form.Item name="descuento_3" label="Descuento en el 3°+ examen (CLP)" initialValue={0} rules={[{ required: true }]}>
+            <InputNumber min={0} step={1000} style={{ width: '100%' }}
+              formatter={v => `$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+              parser={v => Number(v?.replace(/\$\s?|(\.)*/g, '') || 0)} />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </div>
+  )
+}
+
 // ── Página principal ──────────────────────────────────────────────────────────
 
 export default function HonorariosPage() {
@@ -521,6 +617,12 @@ export default function HonorariosPage() {
               <Typography.Text strong style={{ fontSize: 14 }}>Tarifas por tipo de examen</Typography.Text>
             </Divider>
             <TarifasEditor derivadorId={d.id} />
+
+            {/* ── Convenios ──────────────────────────────────────── */}
+            <Divider orientation="left" style={{ marginTop: 32 }}>
+              <Typography.Text strong style={{ fontSize: 14 }}>Convenios de descuento</Typography.Text>
+            </Divider>
+            <ConveniosEditor derivadorId={d.id} />
 
           </Spin>
         ),
