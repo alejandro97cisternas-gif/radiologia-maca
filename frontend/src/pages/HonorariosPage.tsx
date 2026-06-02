@@ -483,16 +483,52 @@ export default function HonorariosPage() {
     return { value: m.format('YYYY-MM'), label: m.format('MMMM YYYY') }
   })
 
+  const agruparDetalle = (detalle: any[]) => {
+    const map = new Map<string, any>()
+    for (const item of detalle) {
+      const key = item.caso_id || `solo_${item.examen_id}`
+      if (!map.has(key)) map.set(key, { key, fecha: item.fecha, paciente: item.paciente, examenes: [] })
+      map.get(key).examenes.push(item)
+    }
+    return Array.from(map.values()).map(c => ({
+      ...c,
+      total: c.examenes.reduce((s: number, e: any) => s + e.precio, 0),
+    }))
+  }
+
   const columnsDetalle = [
     { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 100 },
-    { title: 'Paciente', dataIndex: 'paciente', key: 'paciente' },
+    { title: 'Paciente', dataIndex: 'paciente', key: 'paciente', width: 180 },
     {
-      title: 'Examen', dataIndex: 'tipo_examen', key: 'tipo_examen',
-      render: (v: string) => <Tag color="blue">{v}</Tag>,
+      title: 'Exámenes',
+      key: 'examenes',
+      render: (_: any, row: any) => (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {row.examenes.map((e: any, i: number) => (
+            <div key={e.examen_id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>{e.tipo_examen}</Tag>
+              {e.descuento > 0 && (
+                <Tag color="orange" style={{ margin: 0, fontSize: 10 }}>
+                  -{`$${e.descuento.toLocaleString('es-CL')}`} {i === 1 ? '(2°)' : '(3°+)'}
+                </Tag>
+              )}
+            </div>
+          ))}
+        </div>
+      ),
     },
     {
-      title: 'Precio', dataIndex: 'precio', key: 'precio', align: 'right' as const,
-      render: (v: number) => `$${v.toLocaleString('es-CL')}`,
+      title: 'Total caso', key: 'total', align: 'right' as const,
+      render: (_: any, row: any) => (
+        <div style={{ textAlign: 'right' }}>
+          <span style={{ fontWeight: 600 }}>${row.total.toLocaleString('es-CL')}</span>
+          {row.examenes.length > 1 && (
+            <div style={{ fontSize: 10, color: '#9ca3af' }}>
+              {row.examenes.map((e: any) => `$${e.precio.toLocaleString('es-CL')}`).join(' + ')}
+            </div>
+          )}
+        </div>
+      ),
     },
   ]
 
@@ -597,9 +633,9 @@ export default function HonorariosPage() {
             </Row>
 
             <Table
-              dataSource={detalle?.detalle || []}
+              dataSource={agruparDetalle(detalle?.detalle || [])}
               columns={columnsDetalle}
-              rowKey="examen_id"
+              rowKey="key"
               pagination={false}
               size="small"
               summary={() => detalle?.total ? (
