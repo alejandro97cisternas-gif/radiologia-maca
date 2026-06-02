@@ -77,7 +77,7 @@ export default function PortalExamen() {
     if (!examen?.informe_url) return
     setDescargando(true)
     try {
-      const res = await fetch({resolveUrl(examen.informe_url)})
+      const res = await fetch(resolveUrl(examen.informe_url))
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -366,7 +366,7 @@ export default function PortalExamen() {
                       {imgs2D.map(img => (
                         <Col key={img.id} xs={12} sm={8} md={6} lg={4}>
                           <div style={{ position: 'relative' }}>
-                            <Image src={{resolveUrl(img.url)}} alt={img.nombre}
+                            <Image src={resolveUrl(img.url)} alt={img.nombre}
                               style={{ objectFit: 'cover', height: 120, width: '100%' }} />
                             {editMode && (
                               <Popconfirm title={`¿Eliminar "${img.nombre}"?`} okText="Eliminar"
@@ -460,7 +460,7 @@ export default function PortalExamen() {
                       {imgsPreview.map(img => (
                         <Col key={img.id} xs={12} sm={8} md={6} lg={4}>
                           <div style={{ position: 'relative' }}>
-                            <Image src={{resolveUrl(img.url)}} alt={img.nombre}
+                            <Image src={resolveUrl(img.url)} alt={img.nombre}
                               style={{ objectFit: 'cover', height: 120, width: '100%' }} />
                             {editMode && (
                               <Popconfirm title={`¿Eliminar "${img.nombre}"?`} okText="Eliminar"
@@ -565,7 +565,7 @@ export default function PortalExamen() {
       >
         {examen?.informe_url && (
           <iframe
-            src={{resolveUrl(examen.informe_url)}}
+            src={resolveUrl(examen.informe_url)}
             style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
             title="Informe PDF"
           />
