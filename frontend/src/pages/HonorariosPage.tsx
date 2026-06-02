@@ -181,9 +181,12 @@ function TarifasEditor({ derivadorId }: { derivadorId: number }) {
             <Select
               showSearch
               placeholder="Buscar o escribir nombre…"
-              filterOption={(input, opt) =>
-                String(opt?.value ?? '').toLowerCase().includes(input.toLowerCase())
-              }
+              filterOption={(input, opt) => {
+                if (!opt?.value) return false
+                const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+                const hay = norm(String(opt.value))
+                return norm(input).split(/\s+/).filter(Boolean).every(w => hay.includes(w))
+              }}
               onSearch={setSearchText}
               options={tipoOptions}
               style={{ width: '100%' }}
