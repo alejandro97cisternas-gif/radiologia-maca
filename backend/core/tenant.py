@@ -1,6 +1,6 @@
 from fastapi import Request, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
+from starlette.responses import Response, JSONResponse
 from core.config import settings
 from core.database import SessionLocal
 from modulos.usuarios.models import Usuario
@@ -21,7 +21,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
 
         slug = _extraer_slug(request)
         if not slug:
-            raise HTTPException(status_code=404, detail="Tenant no identificado")
+            return JSONResponse({"detail": "Tenant no identificado"}, status_code=404)
 
         db = SessionLocal()
         try:
@@ -34,7 +34,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
             db.close()
 
         if not radiologo:
-            raise HTTPException(status_code=404, detail=f"Radiólogo '{slug}' no encontrado")
+            return JSONResponse({"detail": f"Radiólogo '{slug}' no encontrado"}, status_code=404)
 
         request.state.radiologo = radiologo
         request.state.radiologo_id = radiologo.id
