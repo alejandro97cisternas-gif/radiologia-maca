@@ -221,7 +221,7 @@ def crear_examen(body: ExamenCreate, derivador: Derivador = Depends(get_portal_d
         "tipo_examen": examen.tipo_examen,
         "estado": examen.estado,
         "version": 0,
-        "dimension": _resolver_dim(examen.tipo_examen, db),
+        "dimension": _resolver_dim(examen.tipo_examen, derivador.radiologo_id, db),
         "creado_en": examen.creado_en,
     }
 
@@ -269,7 +269,7 @@ def detalle_examen(
         "tipo_examen": examen.tipo_examen,
         "estado": examen.estado,
         "version": examen.version or 0,
-        "dimension": _resolver_dim(examen.tipo_examen, db),
+        "dimension": _resolver_dim(examen.tipo_examen, derivador.radiologo_id, db),
         "creado_en": examen.creado_en,
         "informe_url": get_url(examen.informe.ruta_pdf) if examen.informe else None,
     }
@@ -307,7 +307,7 @@ async def subir_imagen(
     rut = examen.paciente.rut or f"pac{examen.paciente_id}"
     tipo = examen.tipo_examen
 
-    dim = _resolver_dim(tipo, db)
+    dim = _resolver_dim(tipo, derivador.radiologo_id, db)
     if dim == "AMBOS":
         if dim_override not in ("2D", "3D"):
             raise HTTPException(400, "dim_override='2D' o '3D' requerido para tipos con ambas dimensiones")
