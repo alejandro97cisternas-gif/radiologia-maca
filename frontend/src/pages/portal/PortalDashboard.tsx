@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { useTutorialDerivador, reiniciarTutorialDerivador } from '../../hooks/useTutorialDerivador'
 import {
   Typography, Table, Tag, Button, Layout, Menu,
   Popconfirm, message, Segmented, Badge, Calendar, Modal, Input, Alert, Form,
@@ -6,7 +7,7 @@ import {
 import {
   PlusOutlined, PictureOutlined, DollarOutlined,
   DeleteOutlined, AppstoreOutlined, TableOutlined, CalendarOutlined, WarningOutlined, CheckCircleOutlined,
-  BellOutlined,
+  BellOutlined, QuestionCircleOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { portalGetIncidencia, portalResolverIncidencia } from '../../api/incidencias'
@@ -220,6 +221,8 @@ export default function PortalDashboard() {
   const [loadingInc, setLoadingInc] = useState(false)
   const [formInc] = Form.useForm()
 
+  useTutorialDerivador(!info)
+
   const abrirIncidencia = async (examen: any) => {
     setIncModal({ examenId: examen.id, examen })
     setIncidencia(null)
@@ -300,7 +303,7 @@ export default function PortalDashboard() {
     <>
     <Layout style={{ minHeight: '100vh' }}>
       <Sider width={200} style={{ background: '#1e3a5f' }}>
-        <div style={{ padding: '20px 16px', color: '#fff', fontWeight: 700, fontSize: 14 }}>
+        <div id="portal-titulo" style={{ padding: '20px 16px', color: '#fff', fontWeight: 700, fontSize: 14 }}>
           Portal Clínica
         </div>
         <Menu
@@ -309,7 +312,7 @@ export default function PortalDashboard() {
           style={{ background: '#1e3a5f', border: 'none' }}
           items={[
             { key: 'dashboard', label: 'Mis exámenes', onClick: () => navigate('/portal/dashboard') },
-            { key: 'tarifas', icon: <DollarOutlined />, label: 'Tarifas', onClick: () => navigate('/portal/tarifas') },
+            { key: 'tarifas', icon: <DollarOutlined />, label: <span id="portal-tarifas-link">Tarifas</span>, onClick: () => navigate('/portal/tarifas') },
           ]}
         />
       </Sider>
@@ -324,6 +327,7 @@ export default function PortalDashboard() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <Typography.Text strong style={{ fontSize: 15 }}>{info?.nombre}</Typography.Text>
             <Segmented
+              id="portal-vista-selector"
               value={vista}
               onChange={v => setVista(v as Vista)}
               options={[
@@ -336,15 +340,22 @@ export default function PortalDashboard() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {/* Campana de notificaciones */}
+            <Button
+              icon={<QuestionCircleOutlined />}
+              type="text"
+              title="Ver tutorial"
+              onClick={() => { reiniciarTutorialDerivador(); window.location.reload() }}
+            />
             <Badge count={noLeidas} size="small" offset={[-2, 2]}>
               <Button
+                id="portal-notificaciones"
                 shape="circle"
                 icon={<BellOutlined />}
                 onClick={abrirNotif}
                 style={{ border: noLeidas > 0 ? '1px solid #f59e0b' : undefined }}
               />
             </Badge>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/portal/nuevo-paciente')}>
+            <Button id="portal-nuevo-caso" type="primary" icon={<PlusOutlined />} onClick={() => navigate('/portal/nuevo-paciente')}>
               Nuevo caso
             </Button>
           </div>
@@ -353,11 +364,13 @@ export default function PortalDashboard() {
         {/* Contenido */}
         <Content style={{ flex: 1, overflow: 'auto', padding: 24, background: '#f8fafc' }}>
           {vista === 'board' && (
+            <div id="portal-board">
             <BoardPortal
               examenes={examenes}
               onVer={id => navigate(`/portal/examen/${id}`)}
               onIncidencia={abrirIncidencia}
             />
+            </div>
           )}
           {vista === 'tabla' && (
             <TablaPortal
