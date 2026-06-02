@@ -3,6 +3,7 @@ import { Table, Button, Modal, Form, Input, Space, Tag, message, Popconfirm, Typ
 import { PlusOutlined, LinkOutlined, EditOutlined, StopOutlined } from '@ant-design/icons'
 import { getDerivadores, crearDerivador, actualizarDerivador, eliminarDerivador, generarMagicLink } from '../api/derivadores'
 import type { Derivador } from '../api/derivadores'
+import { useTutorialDerivadores } from '../hooks/useTutorialDoctora'
 
 export default function DerivadoresPage() {
   const [derivadores, setDerivadores] = useState<Derivador[]>([])
@@ -11,6 +12,8 @@ export default function DerivadoresPage() {
   const [editTarget, setEditTarget] = useState<Derivador | null>(null)
   const [linkResult, setLinkResult] = useState<{ url: string; email_enviado: boolean } | null>(null)
   const [form] = Form.useForm()
+
+  useTutorialDerivadores()
 
   const load = () => {
     setLoading(true)
@@ -67,7 +70,7 @@ export default function DerivadoresPage() {
       title: 'Nombre', key: 'nombre',
       render: (_: any, d: Derivador) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ width: 12, height: 12, borderRadius: '50%', background: d.color || '#6b7280', flexShrink: 0 }} />
+          <div id="col-color" style={{ width: 12, height: 12, borderRadius: '50%', background: d.color || '#6b7280', flexShrink: 0 }} />
           {d.nombre}
         </div>
       ),
@@ -79,7 +82,7 @@ export default function DerivadoresPage() {
       render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? 'Activo' : 'Inactivo'}</Tag>
     },
     {
-      title: 'Acciones', key: 'actions',
+      title: <span id="col-acciones">Acciones</span>, key: 'actions',
       render: (_: any, d: Derivador) => (
         <Space>
           <Tooltip title="Editar"><Button size="small" icon={<EditOutlined />} onClick={() => openEdit(d)} /></Tooltip>
@@ -100,7 +103,7 @@ export default function DerivadoresPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <Typography.Title level={3} style={{ margin: 0 }}>Derivadores</Typography.Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Nuevo derivador</Button>
+        <Button id="btn-nuevo-derivador" type="primary" icon={<PlusOutlined />} onClick={openCreate}>Nuevo derivador</Button>
       </div>
 
       {linkResult && (

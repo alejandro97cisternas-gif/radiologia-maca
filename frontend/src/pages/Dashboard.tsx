@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Segmented, Typography, Spin, Badge, Calendar } from 'antd'
-import { useTutorialDoctora } from '../hooks/useTutorialDoctora'
+import { useTutorialDashboard } from '../hooks/useTutorialDoctora'
 import { TableOutlined, AppstoreOutlined, CalendarOutlined } from '@ant-design/icons'
 import PanelIncidencias from '../components/PanelIncidencias'
 import type { Dayjs } from 'dayjs'
@@ -25,7 +25,7 @@ export default function Dashboard() {
   const [mes, setMes] = useState(dayjs().format('YYYY-MM'))
   const [calendario, setCalendario] = useState<Record<string, any[]>>({})
 
-  useTutorialDoctora(loading)
+  useTutorialDashboard(loading)
 
   const cargar = useCallback(() => {
     setLoading(true)

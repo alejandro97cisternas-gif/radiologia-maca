@@ -41,7 +41,7 @@ export default function AppLayout({ children, noPadding }: { children: ReactNode
               id="btn-tutorial"
               icon={<QuestionCircleOutlined />}
               type="text"
-              onClick={() => { reiniciarTutorialDoctora(); window.location.reload() }}
+              onClick={() => { reiniciarTutorialDoctora(); navigate('/') }}
               title="Ver tutorial"
             />
             <Button icon={<LogoutOutlined />} type="text" onClick={logout}>Cerrar sesión</Button>

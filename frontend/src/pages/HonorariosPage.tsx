@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTutorialHonorarios } from '../hooks/useTutorialDoctora'
 import {
   Tabs, Table, Typography, Button, Select, Statistic, Card, Row, Col,
   Tag, message, Spin, Divider, InputNumber, Space, Modal, Form, Popconfirm,
@@ -136,13 +137,14 @@ function TarifasEditor({ derivadorId }: { derivadorId: number }) {
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           {tarifas.length === 0 ? 'Sin exámenes configurados.' : `${tarifas.length} tipo${tarifas.length !== 1 ? 's' : ''} configurado${tarifas.length !== 1 ? 's' : ''}`}
         </Typography.Text>
-        <Button type="primary" icon={<PlusOutlined />} size="small" onClick={() => setModalOpen(true)}>
+        <Button id="btn-agregar-examen" type="primary" icon={<PlusOutlined />} size="small" onClick={() => setModalOpen(true)}>
           Agregar examen
         </Button>
       </div>
 
       {tarifas.length > 0 && (
         <Table
+          id="tabla-tarifas"
           dataSource={tarifas}
           columns={columns}
           rowKey="tipo_examen"
@@ -224,6 +226,8 @@ export default function HonorariosPage() {
   const [periodo, setPeriodo] = useState(dayjs().format('YYYY-MM'))
   const [detalles, setDetalles] = useState<Record<number, any>>({})
   const [loading, setLoading] = useState(false)
+
+  useTutorialHonorarios()
 
   useEffect(() => {
     Promise.all([getDerivadores(), getHonorariosGlobal()]).then(([devs, glob]) => {
@@ -388,16 +392,18 @@ export default function HonorariosPage() {
               </Col>
               <Col>
                 <Space>
-                  <Button icon={<CalculatorOutlined />} onClick={() => handleGenerar(d.id)}>
+                  <Button id="btn-calcular" icon={<CalculatorOutlined />} onClick={() => handleGenerar(d.id)}>
                     Calcular
                   </Button>
                   <Button
+                    id="btn-vista-previa"
                     icon={<EyeOutlined />}
                     onClick={() => handlePreview(d.id)}
                   >
                     Vista previa
                   </Button>
                   <Button
+                    id="btn-enviar-clinica"
                     type="primary"
                     icon={<SendOutlined />}
                     onClick={() => handleEnviar(d.id)}
@@ -442,13 +448,14 @@ export default function HonorariosPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Typography.Title level={3} style={{ margin: 0 }}>Honorarios</Typography.Title>
         <Select
+          id="honorarios-selector-periodo"
           value={periodo}
           options={periodoOptions}
           onChange={handlePeriodoChange}
           style={{ width: 180 }}
         />
       </div>
-      <Tabs items={tabs} activeKey={activeTab} onChange={handleTabChange} />
+      <Tabs id="honorarios-tabs" items={tabs} activeKey={activeTab} onChange={handleTabChange} />
     </div>
   )
 }
