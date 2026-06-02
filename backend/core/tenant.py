@@ -55,7 +55,7 @@ def _extraer_slug(request: Request) -> str | None:
     ).split(":")[0].strip()
 
     base = settings.BASE_DOMAIN
-    if host.endswith(f".{base}") and host != f"admin.{base}":
+    if host.endswith(f".{base}") and host != f"radioadmin.{base}":
         return host[: -(len(base) + 1)]
 
     return None
@@ -65,6 +65,7 @@ def _es_ruta_global(path: str) -> bool:
     prefijos_globales = (
         "/api/admin",
         "/api/auth/admin",
+        "/admin",
         "/api/health",
         "/docs",
         "/openapi.json",
