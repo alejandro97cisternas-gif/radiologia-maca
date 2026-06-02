@@ -10,14 +10,22 @@ app = FastAPI(
     version="1.0.0",
 )
 
-app.add_middleware(TenantMiddleware)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+def _allowed_origin(origin: str) -> bool:
+    allowed = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:5174",
-    ],
+    ]
+    if origin in allowed:
+        return True
+    # Permitir cualquier subdominio del dominio base
+    base = settings.BASE_DOMAIN
+    return origin.endswith(f".{base}") or origin in (f"https://{base}", f"http://{base}")
+
+app.add_middleware(TenantMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=rf"https?://(localhost(:\d+)?|.*\.{settings.BASE_DOMAIN.replace('.', r'\.')}|{settings.BASE_DOMAIN.replace('.', r'\.')})",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
