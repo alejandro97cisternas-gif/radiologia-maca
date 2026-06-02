@@ -10,6 +10,10 @@ TENANT_ATTR = "radiologo"
 
 class TenantMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
+        # Preflight CORS siempre pasa
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         # Rutas que no necesitan tenant (superadmin, health, auth pública)
         path = request.url.path
         if _es_ruta_global(path):
@@ -43,8 +47,13 @@ def _extraer_slug(request: Request) -> str | None:
     if slug:
         return slug
 
-    # 2. Subdominio del Host header (producción)
-    host = request.headers.get("host", "").split(":")[0]
+    # 2. Subdominio del Host header (producción — Nginx pasa el host original)
+    host = (
+        request.headers.get("X-Forwarded-Host")
+        or request.headers.get("host")
+        or ""
+    ).split(":")[0].strip()
+
     base = settings.BASE_DOMAIN
     if host.endswith(f".{base}") and host != f"admin.{base}":
         return host[: -(len(base) + 1)]
