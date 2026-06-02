@@ -25,9 +25,12 @@ function TarifasEditor({ derivadorId }: { derivadorId: number }) {
   const [allTipos, setAllTipos] = useState<TipoItem[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
+  const [modalCatOpen, setModalCatOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [searchText, setSearchText] = useState('')
   const [form] = Form.useForm()
+  const [formCat] = Form.useForm()
+  const catSeleccionada: string | undefined = Form.useWatch('categoria', formCat)
   const tipoSeleccionado: string | undefined = Form.useWatch('tipo_examen', form)
 
   const esNuevo = useMemo(
@@ -97,6 +100,36 @@ function TarifasEditor({ derivadorId }: { derivadorId: number }) {
     }
   }
 
+  const categoriaOptions = useMemo(() =>
+    [...new Set(allTipos.map(t => t.categoria || 'General'))].map(c => ({ value: c, label: c }))
+  , [allTipos])
+
+  const examenesFaltantesCat = useMemo(() => {
+    if (!catSeleccionada) return []
+    return allTipos.filter(t =>
+      (t.categoria || 'General') === catSeleccionada &&
+      !tarifas.find(tar => tar.tipo_examen === t.nombre)
+    )
+  }, [catSeleccionada, allTipos, tarifas])
+
+  const handleAgregarCategoria = async (values: { categoria: string; precio: number }) => {
+    if (examenesFaltantesCat.length === 0) { message.info('Todos los exámenes de esa categoría ya tienen tarifa'); return }
+    setSaving(true)
+    try {
+      await Promise.all(examenesFaltantesCat.map(t =>
+        crearTarifaItem(derivadorId, { tipo_examen: t.nombre, precio: values.precio, dimension: t.dimension })
+      ))
+      message.success(`${examenesFaltantesCat.length} exámenes agregados`)
+      setModalCatOpen(false)
+      formCat.resetFields()
+      cargar()
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || 'Error al guardar')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleEliminar = async (tipo: string) => {
     try {
       await eliminarTarifaItem(derivadorId, tipo)
@@ -146,9 +179,12 @@ function TarifasEditor({ derivadorId }: { derivadorId: number }) {
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           {tarifas.length === 0 ? 'Sin exámenes configurados.' : `${tarifas.length} tipo${tarifas.length !== 1 ? 's' : ''} configurado${tarifas.length !== 1 ? 's' : ''}`}
         </Typography.Text>
-        <Button id="btn-agregar-examen" type="primary" icon={<PlusOutlined />} size="small" onClick={() => setModalOpen(true)}>
-          Agregar examen
-        </Button>
+        <Space>
+          <Button size="small" onClick={() => setModalCatOpen(true)}>Por categoría</Button>
+          <Button id="btn-agregar-examen" type="primary" icon={<PlusOutlined />} size="small" onClick={() => setModalOpen(true)}>
+            Agregar examen
+          </Button>
+        </Space>
       </div>
 
       {tarifas.length > 0 && (
@@ -218,6 +254,36 @@ function TarifasEditor({ derivadorId }: { derivadorId: number }) {
               min={0}
               step={1000}
               style={{ width: '100%' }}
+              formatter={v => `$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+              parser={v => Number(v?.replace(/\$\s?|(\.)*/g, '') || 0)}
+              placeholder="$0"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="Agregar categoría completa"
+        open={modalCatOpen}
+        onCancel={() => { setModalCatOpen(false); formCat.resetFields() }}
+        onOk={() => formCat.submit()}
+        okText="Guardar"
+        confirmLoading={saving}
+      >
+        <Form form={formCat} layout="vertical" onFinish={handleAgregarCategoria} style={{ marginTop: 16 }}>
+          <Form.Item name="categoria" label="Categoría" rules={[{ required: true }]}>
+            <Select placeholder="Selecciona una categoría" options={categoriaOptions} />
+          </Form.Item>
+          {catSeleccionada && (
+            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
+              {examenesFaltantesCat.length === 0
+                ? 'Todos los exámenes de esta categoría ya tienen tarifa.'
+                : `Se agregarán ${examenesFaltantesCat.length} exámenes con el mismo precio.`}
+            </Typography.Text>
+          )}
+          <Form.Item name="precio" label="Precio por examen (CLP)" rules={[{ required: true }]}>
+            <InputNumber
+              min={0} step={1000} style={{ width: '100%' }}
               formatter={v => `$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
               parser={v => Number(v?.replace(/\$\s?|(\.)*/g, '') || 0)}
               placeholder="$0"
