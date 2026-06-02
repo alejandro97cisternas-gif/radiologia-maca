@@ -8,7 +8,7 @@ from core.security import crear_token
 from core.dependencies import get_portal_derivador
 from core.storage import (
     guardar_imagen_2d, guardar_dicom, guardar_preview_3d,
-    get_url, dimension, listar_archivos_examen, eliminar_carpeta_examen,
+    get_url, dimension, eliminar_carpeta_examen,
 )
 from core.email_service import enviar_tarea_pendiente_a_doctora
 from modulos.derivadores.models import Derivador, PortalMagicLink
@@ -517,9 +517,7 @@ def notificar_doctora(
     if not examen:
         raise HTTPException(404, "Examen no encontrado")
 
-    rut = examen.paciente.rut or f"pac{examen.paciente_id}"
-    archivos = listar_archivos_examen(derivador.radiologo_id, rut, examen_id, examen.tipo_examen)
-    if not archivos:
+    if not examen.imagenes:
         raise HTTPException(400, "No hay imágenes subidas. Suba las imágenes antes de notificar.")
 
     radiologo = derivador.radiologo

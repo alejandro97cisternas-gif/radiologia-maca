@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     R2_ACCESS_KEY: str = ""
     R2_SECRET_KEY: str = ""
     R2_BUCKET: str = ""
-    R2_URL_EXPIRY_SECONDS: int = 3600  # URLs firmadas expiran en 1h
+    R2_URL_EXPIRY_SECONDS: int = 86400  # URLs firmadas expiran en 24h
 
     # Superadmin seed
     SUPERADMIN_USERNAME: str = "admin"
