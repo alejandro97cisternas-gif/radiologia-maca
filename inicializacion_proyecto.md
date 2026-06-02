@@ -5,21 +5,39 @@
 | Capa | Tecnología |
 |------|-----------|
 | Backend | FastAPI + Uvicorn (ASGI) |
-| ORM | SQLAlchemy 2.0 |
-| Base de datos | PostgreSQL 16 (Docker, puerto 5433) |
+| ORM | SQLAlchemy 2.0 + Alembic |
+| Base de datos | PostgreSQL 16 (Docker) |
 | Auth | JWT (python-jose) + bcrypt |
 | PDF | ReportLab |
+| Storage | Cloudflare R2 (prod) / disco local (dev) |
 | Frontend | React 19 + TypeScript + Vite |
 | UI | Ant Design 6 + @dnd-kit |
 | HTTP Client | Axios |
+| Proxy | Nginx + Certbot (wildcard SSL) |
 
 ---
 
-## Arrancar el Proyecto
+## Arquitectura Multi-Tenant
+
+Cada radiólogo es un tenant aislado con su propio subdominio:
+
+```
+draperez.novex.cloud      → panel doctora + portal derivadores
+drsanchez.novex.cloud     → otro radiólogo
+radioadmin.novex.cloud    → panel superadmin
+```
+
+- **Tenant resolver**: middleware lee `Host` header → extrae slug → inyecta `radiologo_id`
+- **Aislamiento**: todos los datos filtrados por `radiologo_id` en BD
+- **Storage**: `data/{radiologo_id}/{rut}/ordenes/{examen_id}/...`
+
+---
+
+## Arrancar en Desarrollo
 
 ```bash
 # 1. Base de datos
-docker-compose up -d
+docker start Macarena_postgres
 
 # 2. Backend
 cd backend
@@ -30,277 +48,218 @@ cd frontend
 npm run dev   # → localhost:5173
 ```
 
-**Seed inicial**: usuario `doctora` / contraseña `Maca2024!` (se crea en `init_db()`)
+**Dev tenant**: abrir consola del browser y ejecutar:
+```js
+localStorage.setItem('dev_tenant_slug', 'draperez')
+```
 
 ---
 
 ## Variables de Entorno (`backend/.env`)
 
 ```
-DATABASE_URL=postgresql://maca:maca123@localhost:5433/maca_informes
-SECRET_KEY=<clave-secreta>
+# PostgreSQL
+POSTGRES_USER=novex-freeradio
+POSTGRES_PASSWORD=<password>
+POSTGRES_DB=radiologia_db
+DATABASE_URL=postgresql://novex-freeradio:<password>@localhost:5433/radiologia_db
+
+# Seguridad
+SECRET_KEY=<clave 64 chars hex>
 ACCESS_TOKEN_EXPIRE_MINUTES=480
-APP_URL=http://localhost:8000
-FRONTEND_URL=http://localhost:5173
+
+# Dominio
+BASE_DOMAIN=novex.cloud
+APP_URL=https://novex.cloud
+FRONTEND_URL=https://novex.cloud
+
+# Superadmin
+SUPERADMIN_USERNAME=admin
+SUPERADMIN_PASSWORD=<password>
+SUPERADMIN_EMAIL=<email>
+
+# SMTP
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=
 SMTP_PASSWORD=
 SMTP_FROM=
-DOCTORA_EMAIL=
-DOCTORA_NOMBRE=Dra. Macarena
-STORAGE_ROOT=data/pacientes
+
+# Storage
+STORAGE_ROOT=data
+STORAGE_BACKEND=r2          ← "local" en dev, "r2" en prod
+R2_ACCOUNT_ID=<cloudflare account id>
+R2_ACCESS_KEY=<r2 access key>
+R2_SECRET_KEY=<r2 secret key>
+R2_BUCKET=maca-radiologia
+R2_URL_EXPIRY_SECONDS=86400
 ```
 
 ---
 
-## Arquitectura
+## Migraciones (Alembic)
+
+```bash
+# Aplicar migraciones
+cd backend && alembic upgrade head
+
+# Nueva migración tras cambiar modelos
+alembic revision --autogenerate -m "descripcion"
+alembic upgrade head
+```
+
+---
+
+## Infraestructura Producción
+
+| Componente | Dónde |
+|---|---|
+| VPS | Hostinger (`177.7.48.49`) |
+| Backend | Docker puerto `8001` |
+| Frontend | Docker puerto `3001` |
+| PostgreSQL | Docker puerto `5432` (interno) |
+| Storage archivos | Cloudflare R2 bucket `maca-radiologia` |
+| Dominio + DNS | Cloudflare (`novex.cloud`) |
+| SSL wildcard | Certbot + dns-cloudflare plugin |
+| Proxy | Nginx → `/api/` a 8001, `/` a 3001 |
+
+### Deploy en VPS
+
+```bash
+cd /var/www/radiologia-maca
+git pull
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+### Solo backend o frontend
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build backend
+docker compose -f docker-compose.prod.yml up -d --build frontend
+```
+
+---
+
+## Arquitectura de Código
 
 ```
 Gestion_informes_maca/
 ├── backend/
 │   ├── api/
-│   │   ├── main.py                ← Entry point FastAPI
+│   │   ├── main.py                ← FastAPI entry point + CORS + middleware
 │   │   └── routers/
-│   │       ├── auth.py
-│   │       ├── examenes.py        ← Doctor: CRUD + subir informe + descargar ZIP
-│   │       ├── derivadores.py     ← CRUD derivadores + color
-│   │       ├── honorarios.py      ← Tarifas por derivador + generación PDF
-│   │       ├── incidencias.py     ← Incidencias + notificaciones doctora
-│   │       ├── portal.py          ← Portal derivador: pacientes, exámenes, imágenes,
-│   │       │                         versiones, notificaciones
-│   │       └── dashboard.py
+│   │       ├── auth.py            ← login doctora + superadmin
+│   │       ├── admin.py           ← CRUD radiólogos (superadmin)
+│   │       ├── examenes.py        ← CRUD exámenes + informe + ZIP
+│   │       ├── derivadores.py     ← CRUD derivadores + magic link
+│   │       ├── honorarios.py      ← Tarifas + PDF honorarios
+│   │       ├── incidencias.py     ← Incidencias + notificaciones
+│   │       ├── portal.py          ← Portal derivador completo
+│   │       └── dashboard.py       ← Calendario + árbol carpetas
 │   ├── core/
-│   │   ├── config.py
-│   │   ├── database.py            ← Engine + init_db()
-│   │   ├── dependencies.py        ← get_current_user / get_portal_derivador
-│   │   ├── email_service.py       ← SMTP Gmail (magic link, informe listo, honorarios,
-│   │   │                             incidencia, tarea pendiente)
+│   │   ├── config.py              ← Settings (pydantic)
+│   │   ├── database.py            ← Engine + seed superadmin
+│   │   ├── dependencies.py        ← get_current_user / get_portal_derivador / get_superadmin
+│   │   ├── email_service.py       ← SMTP emails
 │   │   ├── security.py            ← JWT create/verify
-│   │   └── storage.py             ← Gestión archivos en disco (dim override para tipos custom)
+│   │   ├── storage.py             ← Dual backend: local / Cloudflare R2
+│   │   └── tenant.py              ← TenantMiddleware (Host → radiologo_id)
+│   ├── migrations/                ← Alembic versions
 │   └── modulos/
-│       ├── usuarios/models.py
-│       ├── derivadores/models.py  ← campo color (#hex)
-│       ├── pacientes/models.py
-│       ├── examenes/models.py     ← Examen (version), ImagenExamen,
-│       │                             RevisionExamen, TipoExamenCustom
+│       ├── usuarios/models.py     ← rol, slug, nombre_display (multi-tenant)
+│       ├── derivadores/models.py  ← radiologo_id FK
+│       ├── pacientes/models.py    ← radiologo_id FK
+│       ├── examenes/models.py     ← TipoExamenCustom con radiologo_id
 │       ├── informes/models.py
 │       ├── tarifas/models.py
 │       ├── honorarios/models.py
 │       ├── incidencias/models.py
-│       └── notificaciones/models.py  ← derivador_id + examen_id para portal
+│       └── notificaciones/models.py ← radiologo_id FK
 ├── frontend/
 │   └── src/
 │       ├── api/
-│       │   ├── client.ts          ← Axios doctora (JWT)
-│       │   ├── portalClient.ts    ← Axios portal (token portal)
-│       │   ├── examenes.ts        ← + descargarImagenes()
-│       │   ├── portal.ts          ← + notificaciones, subida con dim_override
-│       │   ├── honorarios.ts      ← tarifas por ítem, preview PDF
-│       │   ├── derivadores.ts     ← + color
-│       │   └── incidencias.ts
-│       ├── components/
-│       │   ├── BoardExamenes.tsx  ← color derivador, version tag, botón descarga ZIP
-│       │   ├── TablaExamenes.tsx  ← color derivador, version tag, botón descarga ZIP
-│       │   └── ExamenDrawer.tsx   ← subir informe + popup confirmación + botón descarga ZIP
+│       │   ├── client.ts          ← Axios doctora (JWT + X-Tenant-Slug)
+│       │   ├── portalClient.ts    ← Axios portal (token + X-Tenant-Slug + sliding window)
+│       │   ├── adminClient.ts     ← Axios superadmin
+│       │   ├── tenant.ts          ← Extrae slug del subdominio
+│       │   └── ...
 │       ├── pages/
-│       │   ├── DashboardPage.tsx
-│       │   ├── DerivadoresPage.tsx  ← ColorPicker
-│       │   ├── HonorariosPage.tsx   ← tarifas por derivador, tipos custom, preview
+│       │   ├── admin/
+│       │   │   ├── AdminLogin.tsx
+│       │   │   └── AdminDashboard.tsx  ← CRUD radiólogos
 │       │   └── portal/
-│       │       ├── PortalDashboard.tsx   ← campana notificaciones, sin BORRADOR
-│       │       ├── PortalNuevoPaciente.tsx ← zonas upload por dimensión, sin doble diálogo
-│       │       └── PortalExamen.tsx       ← modo edición, versiones, preview PDF informe
+│       │       ├── PortalAcceso.tsx    ← Magic link + self-service email
+│       │       └── ...
 │       └── App.tsx
-└── docker-compose.yml
+├── docker-compose.yml             ← Desarrollo local
+├── docker-compose.prod.yml        ← Producción
+└── .gitignore
 ```
 
 ---
 
 ## Modelo de Datos
 
-| Tabla | Campos clave / notas |
-|-------|---------------------|
-| `usuarios` | auth doctora |
-| `derivadores` | nombre, email, color (#hex) |
-| `portal_magic_links` | token temporal 24h por derivador |
-| `pacientes` | N→1 derivador, rut, fecha_nacimiento |
-| `examenes` | estado, **version** (int), N→1 paciente/derivador, 1→N imagenes |
-| `revision_examenes` | examen_id, numero_version, tipo_cambio, comentario |
-| `imagenes_examen` | tipo (2D/DICOM/PREVIEW), ruta absoluta en disco |
-| `informes` | 1→1 examen, ruta_pdf, token_publico |
-| `tipos_examen_custom` | nombre único, dimension (2D/3D/**AMBOS**), activo |
-| `tarifas_derivador` | derivador_id, tipo_examen, precio — creadas por ítem, no pre-seeding |
-| `honorarios` | período YYYY-MM, total, estado |
-| `incidencias` | comentario doctora/derivador, estado ABIERTA/RESUELTA |
-| `notificaciones` | mensaje, leida, **derivador_id** (NULL=doctora, SET=portal) |
+| Tabla | Campos clave |
+|-------|-------------|
+| `usuarios` | rol (superadmin/radiologo), slug, nombre_display, email |
+| `derivadores` | radiologo_id FK, nombre, email, color |
+| `portal_magic_links` | token UUID, expira_en, activo (uso único) |
+| `pacientes` | radiologo_id FK, derivador_id FK, rut |
+| `examenes` | estado, version, paciente_id, derivador_id |
+| `imagenes_examen` | ruta (R2 key o path local), tipo (2D/DICOM/PREVIEW) |
+| `informes` | ruta_pdf (R2 key), token_publico UUID |
+| `tipos_examen_custom` | radiologo_id FK, nombre, dimension (2D/3D/AMBOS) |
+| `tarifas_derivador` | derivador_id, tipo_examen, precio |
+| `honorarios` | derivador_id, periodo YYYY-MM, total, detalle_json |
+| `incidencias` | examen_id, comentario_doctora, estado |
+| `notificaciones` | radiologo_id FK, derivador_id (NULL=doctora) |
 
 **Estados examen**: `BORRADOR → PENDIENTE → EN_PROCESO → COMPLETADO`
 
-**Dimensiones**: `2D` / `3D` / `AMBOS` (activa dos zonas de subida)
+---
 
-**Tipos base**: `PANO, CBCT-LOC, CBCT-SUP, CBCT-INF, CBCT-BI, RETRO, BW-UNI, BW-BIL, TELE-L, ORTO, CEF-AN, CARP`
+## Flujo de Acceso
+
+### Radiólogo (doctora)
+1. `https://draperez.novex.cloud` → login con username/password
+2. JWT con tipo `"doctora"` scoped al tenant
+
+### Derivador (portal)
+1. Doctora genera magic link → email al derivador
+2. Derivador abre link → token validado → JWT 7 días
+3. **Self-service**: derivador entra a `https://draperez.novex.cloud/portal/acceder` → ingresa email → recibe nuevo link
+4. **Sliding window**: JWT se renueva automáticamente si quedan <3 días (header `X-Token-Refresh`)
+
+### Superadmin
+1. `https://radioadmin.novex.cloud/admin/login`
+2. Crea radiólogos con slug → define subdominio automáticamente
 
 ---
 
-## Migraciones manuales ejecutadas
+## Agregar nuevo radiólogo
 
-```sql
--- Color en derivadores
-ALTER TABLE derivadores ADD COLUMN IF NOT EXISTS color VARCHAR DEFAULT '#6b7280';
-
--- Versión en examenes
-ALTER TABLE examenes ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 0;
-
--- Tabla revisiones
-CREATE TABLE IF NOT EXISTS revision_examenes (...);
-
--- Tabla tipos custom
-CREATE TABLE IF NOT EXISTS tipos_examen_custom (...);
-
--- Notificaciones portal
-ALTER TABLE notificaciones ADD COLUMN IF NOT EXISTS derivador_id INTEGER REFERENCES derivadores(id);
-ALTER TABLE notificaciones ADD COLUMN IF NOT EXISTS examen_id INTEGER REFERENCES examenes(id);
-```
+1. Entrar a `https://radioadmin.novex.cloud/admin/login`
+2. Crear radiólogo con slug (ej: `draperez`)
+3. El radiólogo entra a `https://draperez.novex.cloud`
+4. Desde su panel crea derivadores → les envía magic link por email
 
 ---
 
-## API Endpoints Principales
-
-### Doctora (JWT Bearer)
-
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| GET | `/api/examenes/tipos` | Tipos base + custom activos |
-| GET | `/api/examenes/todos` | Todos los exámenes (sin BORRADOR) |
-| GET | `/api/examenes/{id}` | Detalle con imágenes |
-| GET | `/api/examenes/{id}/descargar-imagenes` | ZIP `{RUT}-{TIPO}.zip` |
-| POST | `/api/examenes/{id}/informe` | Sube PDF → COMPLETADO + email + notif portal |
-| GET | `/api/honorarios/{id}/tarifas` | Tarifas configuradas del derivador |
-| POST | `/api/honorarios/{id}/tarifas/item` | Crear tarifa + tipo si es nuevo |
-| DELETE | `/api/honorarios/{id}/tarifas/{tipo}` | Quitar tarifa del derivador |
-| GET | `/api/honorarios/{id}/preview` | PDF honorarios en streaming |
-| PATCH | `/api/honorarios/tipos-examen/{id}` | Activar/desactivar tipo custom |
-
-### Portal derivador (token portal)
-
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| GET | `/api/portal/examenes` | Exámenes del derivador (sin BORRADOR) |
-| GET | `/api/portal/examenes/{id}` | Detalle + informe_url si existe |
-| POST | `/api/portal/examenes/{id}/imagenes` | Sube imagen/dicom/preview (dim_override para AMBOS) |
-| POST | `/api/portal/examenes/{id}/confirmar-edicion` | Bumps version, crea RevisionExamen |
-| POST | `/api/portal/examenes/{id}/nota` | Crea nota sin bump de versión |
-| POST | `/api/portal/confirmar-tareas` | BORRADOR → PENDIENTE |
-| GET | `/api/portal/notificaciones` | Notificaciones no leídas del derivador |
-| POST | `/api/portal/notificaciones/leer-todas` | Marca todas como leídas |
-| POST | `/api/portal/notificaciones/{id}/leer` | Marca una como leída |
-
----
-
-## Storage de Archivos
+## Storage Cloudflare R2
 
 ```
-data/pacientes/
-└── {rut}/
-    └── ordenes/
-        └── {examen_id}/
-            ├── 2D/{tipo}/imagen/            ← JPG/PNG (2D puro o lado 2D de AMBOS)
-            │              └── informe/      ← PDF subido por doctora
-            └── 3D/{tipo}/imagen/
-                           ├── dicom/        ← .dcm
-                           └── preview/      ← capturas/fotos del DICOM
+Bucket: maca-radiologia
+Estructura: {radiologo_id}/{rut}/ordenes/{examen_id}/{dim}/{tipo}/imagen/{archivo}
 ```
 
-Tipos AMBOS: guardan en `2D/` o `3D/` según `dim_override` enviado desde el frontend.
+- `STORAGE_BACKEND=local` → disco local (dev)
+- `STORAGE_BACKEND=r2` → Cloudflare R2 (prod)
+- URLs firmadas con expiración 24h (`R2_URL_EXPIRY_SECONDS=86400`)
 
 ---
 
-## Zonas de subida por dimensión (Portal Nuevo Caso)
+## Pendiente
 
-| Tipo | Zonas |
-|------|-------|
-| 2D | imagen (JPG/PNG) |
-| 3D | DICOM (.dcm) + Preview (JPG/PNG) |
-| 3D Bimaxilar | Superior DICOM + Inferior DICOM + Preview |
-| AMBOS | 2D imagen + 3D DICOM + 3D Preview |
-
----
-
-## Funcionalidades por módulo
-
-### Dashboard Doctora
-- Vista board (kanban drag & drop) / tabla / calendario
-- Color del derivador en borde de card y punto indicador
-- Tag de versión `v0` (gris) / `v1+` (naranja)
-- Botón descarga ZIP imágenes por examen (`{RUT}-{TIPO}.zip`)
-- Popup confirmación al subir informe ("pasado a COMPLETADO, notificado al derivador")
-
-### Derivadores
-- CRUD con ColorPicker (10 colores preset + picker libre)
-- Color se propaga a board, tabla, drawer y emails
-
-### Honorarios
-- Tarifas por derivador, creadas individualmente (sin pre-seeding)
-- Catálogo global de tipos de examen con búsqueda inteligente (evita duplicados)
-- Activar/desactivar tipos custom por demanda
-- Dimensión: 2D / 3D / Ambos
-- Vista previa PDF honorarios en modal
-- Envío por email con PDF adjunto
-
-### Portal Derivador — Nuevo caso
-- Búsqueda por RUT con autocompletado
-- Múltiples exámenes por caso, tipos desde catálogo global
-- Zonas de subida según dimensión (ver tabla arriba)
-- Las tareas solo se crean al paso "Notificar" (no antes)
-
-### Portal Derivador — Edición
-- Botón "Modificar" activa modo edición
-- Cambios (add/delete imágenes) detectados automáticamente
-- "Confirmar cambios" → bumps versión + crea RevisionExamen
-- "Guardar nota" → RevisionExamen tipo nota sin bump
-- Historial de versiones con timeline
-- Pestañas dinámicas según dimensión: `📷 2D` / `🧊 DICOM` / `🖼 Preview`
-- Botón "Ver informe" (cuando COMPLETADO) → modal 80% viewport con iframe PDF
-- Footer del modal: "Descargar" → `Informe_{RUT}_{TIPO}.pdf`
-
-### Notificaciones Portal
-- Al subir informe: se crea `Notificacion` con `derivador_id`
-- Campana `🔔` en header del portal con badge de no leídas
-- Polling cada 30 segundos
-- Modal con lista: fondo azul = no leída, click → navega al examen + marca leída
-- "Marcar todas como leídas"
-
-### Email (SMTP Gmail)
-| Evento | Destinatario | Contenido |
-|--------|-------------|-----------|
-| Magic link | Derivador | Enlace acceso portal (24h) |
-| Nuevo caso | Doctora | Datos paciente + examen |
-| Informe listo | Derivador | Tabla datos + botón PDF + botón portal |
-| Incidencia | Derivador | Descripción + link portal |
-| Honorarios | Derivador | PDF adjunto del período |
-
----
-
-## Seguridad
-
-- **Doctora**: JWT via `get_current_user()` (tipo `"doctora"`)
-- **Derivadores**: token portal via `get_portal_derivador()` (tipo `"portal"`)
-- **CORS**: `localhost:5173`, `localhost:5174`
-- **Magic links**: token único UUID por derivador, expiración 24h, uso único (se desactiva al usar)
-
----
-
-## Rutas Frontend
-
-```
-/                          → Dashboard doctora (board/tabla/calendario)
-/login                     → Login doctora
-/derivadores               → CRUD derivadores + color
-/honorarios                → Honorarios + tarifas por centro + preview
-/portal/acceder?token=...  → Login derivador (magic link)
-/portal/dashboard          → Dashboard derivador (board/tabla/calendario + campana)
-/portal/nuevo-paciente     → Crear caso con exámenes e imágenes
-/portal/examen/:id         → Detalle examen: imágenes, edición, versiones, informe
-/portal/tarifas            → Ver tarifas del propio centro
-```
+- [ ] Configurar Resend para emails transaccionales
+- [ ] Configurar SMTP en `.env` del VPS
