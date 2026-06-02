@@ -186,6 +186,7 @@ def listar_examenes(derivador: Derivador = Depends(get_portal_derivador), db: Se
     return [
         {
             "id": e.id,
+            "caso_id": e.caso_id,
             "paciente_id": e.paciente_id,
             "paciente_nombre": e.paciente.nombre_completo,
             "paciente_rut": e.paciente.rut,

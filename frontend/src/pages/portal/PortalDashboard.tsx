@@ -32,48 +32,72 @@ const ESTADO_COLOR: Record<string, string> = {
   BORRADOR: 'default', PENDIENTE: 'orange', EN_PROCESO: 'processing', COMPLETADO: 'success',
 }
 
-// ── Card de examen (solo lectura) ─────────────────────────────────────────────
+// ── Agrupador de casos ────────────────────────────────────────────────────────
 
-function ExamenCard({ e, onVer, onIncidencia }: { e: any; onVer: () => void; onIncidencia: () => void }) {
+function agruparCasos(examenes: any[]): any[] {
+  const map = new Map<string, any[]>()
+  for (const e of examenes) {
+    const key = e.caso_id || `solo_${e.id}`
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(e)
+  }
+  return Array.from(map.entries()).map(([caso_id, exs]) => {
+    const estados = new Set(exs.map((e: any) => e.estado))
+    const estado = estados.size === 1 && estados.has('COMPLETADO') ? 'COMPLETADO'
+      : estados.has('EN_PROCESO') || estados.has('COMPLETADO') ? 'EN_PROCESO' : 'PENDIENTE'
+    return {
+      caso_id,
+      paciente_nombre: exs[0].paciente_nombre,
+      paciente_rut: exs[0].paciente_rut,
+      estado,
+      creado_en: exs[0].creado_en,
+      examenes: exs,
+      incidencia_estado: exs.find((e: any) => e.incidencia_estado === 'ABIERTA')?.incidencia_estado
+        ?? exs.find((e: any) => e.incidencia_estado)?.incidencia_estado ?? null,
+    }
+  })
+}
+
+// ── Card de caso (solo lectura) ───────────────────────────────────────────────
+
+function CasoCard({ caso, onVer, onIncidencia }: { caso: any; onVer: () => void; onIncidencia: (e: any) => void }) {
   return (
     <div
       onClick={onVer}
       style={{
         background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
         padding: '10px 12px', marginBottom: 8, cursor: 'pointer',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-        transition: 'box-shadow 0.15s',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)', transition: 'box-shadow 0.15s',
       }}
       onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)')}
       onMouseLeave={e => (e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)')}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-        <Typography.Text strong style={{ fontSize: 13, color: '#1e3a5f' }}>
-          {e.paciente_nombre}
-        </Typography.Text>
-        <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>{e.tipo_examen}</Tag>
+        <Typography.Text strong style={{ fontSize: 13, color: '#1e3a5f' }}>{caso.paciente_nombre}</Typography.Text>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'flex-end', maxWidth: 180 }}>
+          {caso.examenes.map((e: any) => (
+            <Tag key={e.id} color="blue" style={{ margin: 0, fontSize: 10 }}>{e.tipo_examen}</Tag>
+          ))}
+        </div>
       </div>
-      {e.paciente_rut && (
+      {caso.paciente_rut && (
         <Typography.Text style={{ fontSize: 11, color: '#9ca3af', display: 'block', marginBottom: 4 }}>
-          {e.paciente_rut}
+          {caso.paciente_rut}
         </Typography.Text>
       )}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
         <Typography.Text style={{ fontSize: 11, color: '#9ca3af' }}>
-          {new Date(e.creado_en).toLocaleDateString('es-CL')}
+          {new Date(caso.creado_en).toLocaleDateString('es-CL')}
+          {' · '}{caso.examenes.length} examen{caso.examenes.length !== 1 ? 'es' : ''}
         </Typography.Text>
         <div style={{ display: 'flex', gap: 4 }}>
-          <Tag color={e.dimension === '3D' ? 'purple' : 'cyan'} style={{ margin: 0, fontSize: 10 }}>{e.dimension}</Tag>
-          <Tag color={(e.version ?? 0) === 0 ? 'default' : 'orange'} style={{ margin: 0, fontSize: 10, fontWeight: 600 }}>
-            v{e.version ?? 0}
-          </Tag>
-          {e.incidencia_estado === 'ABIERTA' && (
-            <Tag
-              color="error" style={{ margin: 0, fontSize: 10, cursor: 'pointer' }}
-              onClick={ev => { ev.stopPropagation(); onIncidencia() }}
-            >⚠ Incidencia</Tag>
+          {caso.incidencia_estado === 'ABIERTA' && (
+            <Tag color="error" style={{ margin: 0, fontSize: 10, cursor: 'pointer' }}
+              onClick={ev => { ev.stopPropagation(); onIncidencia(caso.examenes.find((e: any) => e.incidencia_estado === 'ABIERTA')) }}>
+              ⚠ Incidencia
+            </Tag>
           )}
-          {e.incidencia_estado === 'RESUELTA' && (
+          {caso.incidencia_estado === 'RESUELTA' && (
             <Tag color="success" style={{ margin: 0, fontSize: 10 }}>✓ Resuelta</Tag>
           )}
         </div>
@@ -84,12 +108,12 @@ function ExamenCard({ e, onVer, onIncidencia }: { e: any; onVer: () => void; onI
 
 // ── Board (solo lectura) ──────────────────────────────────────────────────────
 
-function BoardPortal({ examenes, onVer, onIncidencia }: { examenes: any[]; onVer: (id: number) => void; onIncidencia: (e: any) => void }) {
+function BoardPortal({ casos, onVer, onIncidencia }: { casos: any[]; onVer: (caso: any) => void; onIncidencia: (e: any) => void }) {
   const porColumna = useMemo(() => {
     const map: Record<string, any[]> = { PENDIENTE: [], EN_PROCESO: [], COMPLETADO: [] }
-    for (const e of examenes) (map[e.estado] ??= []).push(e)
+    for (const c of casos) (map[c.estado] ??= []).push(c)
     return map
-  }, [examenes])
+  }, [casos])
 
   return (
     <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', width: '100%' }}>
@@ -97,16 +121,15 @@ function BoardPortal({ examenes, onVer, onIncidencia }: { examenes: any[]; onVer
         <div key={col.key} style={{ flex: 1, minWidth: 0 }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
-            marginBottom: 8, borderRadius: 8, background: col.bg,
-            border: `1px solid ${col.color}22`,
+            marginBottom: 8, borderRadius: 8, background: col.bg, border: `1px solid ${col.color}22`,
           }}>
             <div style={{ width: 10, height: 10, borderRadius: '50%', background: col.color }} />
             <Typography.Text strong style={{ color: col.color, fontSize: 13 }}>{col.label}</Typography.Text>
             <Badge count={porColumna[col.key]?.length ?? 0} color={col.color} style={{ marginLeft: 'auto' }} />
           </div>
           <div style={{ minHeight: 80 }}>
-            {(porColumna[col.key] ?? []).map((e: any) => (
-              <ExamenCard key={e.id} e={e} onVer={() => onVer(e.id)} onIncidencia={() => onIncidencia(e)} />
+            {(porColumna[col.key] ?? []).map((c: any) => (
+              <CasoCard key={c.caso_id} caso={c} onVer={() => onVer(c)} onIncidencia={onIncidencia} />
             ))}
           </div>
         </div>
@@ -117,53 +140,38 @@ function BoardPortal({ examenes, onVer, onIncidencia }: { examenes: any[]; onVer
 
 // ── Tabla ─────────────────────────────────────────────────────────────────────
 
-function TablaPortal({
-  examenes, onVer, onEliminar, onIncidencia,
-}: {
-  examenes: any[]
-  onVer: (id: number) => void
-  onEliminar: (id: number) => void
-  onIncidencia: (e: any) => void
+function TablaPortal({ casos, onVer, onEliminar, onIncidencia }: {
+  casos: any[]; onVer: (caso: any) => void; onEliminar: (id: number) => void; onIncidencia: (e: any) => void
 }) {
   const columns = [
     {
       title: 'Paciente', key: 'paciente',
-      render: (_: any, e: any) => (
+      render: (_: any, c: any) => (
         <div>
-          <div style={{ fontWeight: 500, fontSize: 13 }}>{e.paciente_nombre || '—'}</div>
-          {e.paciente_rut && <div style={{ fontSize: 11, color: '#9ca3af' }}>{e.paciente_rut}</div>}
+          <div style={{ fontWeight: 500, fontSize: 13 }}>{c.paciente_nombre || '—'}</div>
+          {c.paciente_rut && <div style={{ fontSize: 11, color: '#9ca3af' }}>{c.paciente_rut}</div>}
         </div>
       ),
     },
     {
-      title: 'Examen', key: 'examen',
-      render: (_: any, e: any) => (
-        <div style={{ display: 'flex', gap: 6 }}>
-          <Tag color="blue">{e.tipo_examen}</Tag>
-          <Tag color={e.dimension === '3D' ? 'purple' : 'cyan'}>{e.dimension}</Tag>
+      title: 'Exámenes', key: 'examen',
+      render: (_: any, c: any) => (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {c.examenes.map((e: any) => <Tag key={e.id} color="blue" style={{ margin: 0 }}>{e.tipo_examen}</Tag>)}
         </div>
-      ),
-    },
-    {
-      title: 'Versión', key: 'version',
-      width: 70,
-      render: (_: any, e: any) => (
-        <Tag color={(e.version ?? 0) === 0 ? 'default' : 'orange'} style={{ fontWeight: 600 }}>
-          v{e.version ?? 0}
-        </Tag>
       ),
     },
     {
       title: 'Estado', key: 'estado',
-      render: (_: any, e: any) => (
+      render: (_: any, c: any) => (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          <Tag color={ESTADO_COLOR[e.estado] ?? 'default'}>{e.estado}</Tag>
-          {e.incidencia_estado === 'ABIERTA' && (
-            <Tag color="error" style={{ cursor: 'pointer', fontSize: 11 }} onClick={() => onIncidencia(e)}>
+          <Tag color={ESTADO_COLOR[c.estado] ?? 'default'}>{c.estado}</Tag>
+          {c.incidencia_estado === 'ABIERTA' && (
+            <Tag color="error" style={{ cursor: 'pointer', fontSize: 11 }} onClick={() => onIncidencia(c.examenes.find((e: any) => e.incidencia_estado === 'ABIERTA'))}>
               <WarningOutlined /> Incidencia
             </Tag>
           )}
-          {e.incidencia_estado === 'RESUELTA' && (
+          {c.incidencia_estado === 'RESUELTA' && (
             <Tag color="success" style={{ fontSize: 11 }}><CheckCircleOutlined /> Resuelta</Tag>
           )}
         </div>
@@ -175,16 +183,15 @@ function TablaPortal({
     },
     {
       title: '', key: 'acciones',
-      render: (_: any, e: any) => (
+      render: (_: any, c: any) => (
         <div style={{ display: 'flex', gap: 6 }}>
-          <Button size="small" icon={<PictureOutlined />} onClick={() => onVer(e.id)}>Ver</Button>
-          {e.estado !== 'COMPLETADO' && (
+          <Button size="small" icon={<PictureOutlined />} onClick={() => onVer(c)}>Ver</Button>
+          {c.examenes.every((e: any) => e.estado !== 'COMPLETADO') && (
             <Popconfirm
-              title="¿Eliminar examen?"
-              description="Se borrarán las imágenes y la tarea."
-              okText="Eliminar" cancelText="Cancelar"
-              okButtonProps={{ danger: true }}
-              onConfirm={() => onEliminar(e.id)}
+              title="¿Eliminar caso?"
+              description="Se borrarán todos los exámenes e imágenes."
+              okText="Eliminar" cancelText="Cancelar" okButtonProps={{ danger: true }}
+              onConfirm={() => c.examenes.forEach((e: any) => onEliminar(e.id))}
             >
               <Button size="small" danger icon={<DeleteOutlined />} />
             </Popconfirm>
@@ -194,15 +201,7 @@ function TablaPortal({
     },
   ]
 
-  return (
-    <Table
-      dataSource={examenes}
-      columns={columns}
-      rowKey="id"
-      size="small"
-      pagination={{ pageSize: 25 }}
-    />
-  )
+  return <Table dataSource={casos} columns={columns} rowKey="caso_id" size="small" pagination={{ pageSize: 25 }} />
 }
 
 // ── Dashboard principal ───────────────────────────────────────────────────────
@@ -213,7 +212,10 @@ export default function PortalDashboard() {
   const [vista, setVista] = useState<Vista>('board')
   const [notificaciones, setNotificaciones] = useState<NotificacionPortal[]>([])
   const [notifOpen, setNotifOpen] = useState(false)
+  const [casoModal, setCasoModal] = useState<any | null>(null)
   const navigate = useNavigate()
+
+  const casos = useMemo(() => agruparCasos(examenes), [examenes])
 
   // Modal incidencia
   const [incModal, setIncModal] = useState<{ examenId: number; examen: any } | null>(null)
@@ -274,6 +276,14 @@ export default function PortalDashboard() {
     setNotificaciones(prev => prev.map(n => ({ ...n, leida: true })))
   }
 
+  const onVerCaso = (caso: any) => {
+    if (caso.examenes.length === 1) {
+      navigate(`/portal/examen/${caso.examenes[0].id}`)
+    } else {
+      setCasoModal(caso)
+    }
+  }
+
   const handleEliminar = async (id: number) => {
     try {
       await portalEliminarExamen(id)
@@ -284,15 +294,14 @@ export default function PortalDashboard() {
     }
   }
 
-  // Calendario
   const porDia = useMemo(() => {
     const map: Record<string, number> = {}
-    for (const e of examenes) {
-      const dia = dayjs(e.creado_en).format('YYYY-MM-DD')
+    for (const c of casos) {
+      const dia = dayjs(c.creado_en).format('YYYY-MM-DD')
       map[dia] = (map[dia] ?? 0) + 1
     }
     return map
-  }, [examenes])
+  }, [casos])
 
   const cellRender = (date: Dayjs) => {
     const n = porDia[date.format('YYYY-MM-DD')]
@@ -365,20 +374,11 @@ export default function PortalDashboard() {
         <Content style={{ flex: 1, overflow: 'auto', padding: 24, background: '#f8fafc' }}>
           {vista === 'board' && (
             <div id="portal-board">
-            <BoardPortal
-              examenes={examenes}
-              onVer={id => navigate(`/portal/examen/${id}`)}
-              onIncidencia={abrirIncidencia}
-            />
+              <BoardPortal casos={casos} onVer={onVerCaso} onIncidencia={abrirIncidencia} />
             </div>
           )}
           {vista === 'tabla' && (
-            <TablaPortal
-              examenes={examenes}
-              onVer={id => navigate(`/portal/examen/${id}`)}
-              onEliminar={handleEliminar}
-              onIncidencia={abrirIncidencia}
-            />
+            <TablaPortal casos={casos} onVer={onVerCaso} onEliminar={handleEliminar} onIncidencia={abrirIncidencia} />
           )}
           {vista === 'calendario' && (
             <div style={{ maxWidth: 760 }}>
@@ -462,6 +462,30 @@ export default function PortalDashboard() {
           ))}
         </div>
       )}
+    </Modal>
+
+    {/* Modal selección examen del caso */}
+    <Modal
+      open={!!casoModal}
+      onCancel={() => setCasoModal(null)}
+      footer={null}
+      title={`Caso — ${casoModal?.paciente_nombre}`}
+      width={380}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
+        {casoModal?.examenes.map((e: any) => (
+          <Button
+            key={e.id}
+            block
+            icon={<PictureOutlined />}
+            onClick={() => { setCasoModal(null); navigate(`/portal/examen/${e.id}`) }}
+            style={{ textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}
+          >
+            <Tag color="blue" style={{ margin: 0 }}>{e.tipo_examen}</Tag>
+            <Tag color={ESTADO_COLOR[e.estado]}>{e.estado}</Tag>
+          </Button>
+        ))}
+      </div>
     </Modal>
 
     {/* Modal incidencia */}
