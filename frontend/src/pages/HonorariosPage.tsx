@@ -100,9 +100,16 @@ function TarifasEditor({ derivadorId }: { derivadorId: number }) {
     }
   }
 
-  const categoriaOptions = useMemo(() =>
-    [...new Set(allTipos.map(t => t.categoria || 'General'))].map(c => ({ value: c, label: c }))
-  , [allTipos])
+  const categoriaOptions = useMemo(() => {
+    const conteo = allTipos.reduce<Record<string, number>>((acc, t) => {
+      const c = t.categoria || 'General'
+      acc[c] = (acc[c] || 0) + 1
+      return acc
+    }, {})
+    return Object.entries(conteo)
+      .filter(([, n]) => n > 1)
+      .map(([c]) => ({ value: c, label: c }))
+  }, [allTipos])
 
   const examenesFaltantesCat = useMemo(() => {
     if (!catSeleccionada) return []
