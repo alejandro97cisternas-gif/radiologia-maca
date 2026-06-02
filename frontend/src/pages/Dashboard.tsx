@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Segmented, Typography, Spin, Badge, Calendar } from 'antd'
+import { useTutorialDoctora } from '../hooks/useTutorialDoctora'
 import { TableOutlined, AppstoreOutlined, CalendarOutlined } from '@ant-design/icons'
 import PanelIncidencias from '../components/PanelIncidencias'
 import type { Dayjs } from 'dayjs'
@@ -23,6 +24,8 @@ export default function Dashboard() {
   // Calendario
   const [mes, setMes] = useState(dayjs().format('YYYY-MM'))
   const [calendario, setCalendario] = useState<Record<string, any[]>>({})
+
+  useTutorialDoctora(loading)
 
   const cargar = useCallback(() => {
     setLoading(true)
@@ -70,6 +73,7 @@ export default function Dashboard() {
           Exámenes
         </Typography.Title>
         <Segmented
+          id="vista-selector"
           value={vista}
           onChange={v => setVista(v as Vista)}
           options={[

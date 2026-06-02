@@ -144,7 +144,7 @@ function Columna({
   const { setNodeRef, isOver } = useDroppable({ id: col.key })
 
   return (
-    <div style={{ flex: 1, minWidth: 0 }}>
+    <div id={`board-${col.key.toLowerCase().replace('_', '-')}`} style={{ flex: 1, minWidth: 0 }}>
       {/* Cabecera columna */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,

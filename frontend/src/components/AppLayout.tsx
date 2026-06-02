@@ -1,9 +1,10 @@
 import { ReactNode } from 'react'
-import { Layout, Menu, Button, Typography } from 'antd'
+import { Layout, Menu, Button } from 'antd'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { CalendarOutlined, TeamOutlined, DollarOutlined, LogoutOutlined } from '@ant-design/icons'
+import { CalendarOutlined, TeamOutlined, DollarOutlined, LogoutOutlined, QuestionCircleOutlined } from '@ant-design/icons'
 import { useAuth } from '../context/AuthContext'
 import NotificacionesBell from './NotificacionesBell'
+import { reiniciarTutorialDoctora } from '../hooks/useTutorialDoctora'
 
 const { Sider, Content, Header } = Layout
 
@@ -13,9 +14,9 @@ export default function AppLayout({ children, noPadding }: { children: ReactNode
   const { logout } = useAuth()
 
   const items = [
-    { key: '/', icon: <CalendarOutlined />, label: 'Dashboard' },
-    { key: '/derivadores', icon: <TeamOutlined />, label: 'Derivadores' },
-    { key: '/honorarios', icon: <DollarOutlined />, label: 'Honorarios' },
+    { key: '/', icon: <CalendarOutlined />, label: <span id="menu-dashboard">Dashboard</span> },
+    { key: '/derivadores', icon: <TeamOutlined />, label: <span id="menu-derivadores">Derivadores</span> },
+    { key: '/honorarios', icon: <DollarOutlined />, label: <span id="menu-honorarios">Honorarios</span> },
   ]
 
   return (
@@ -36,6 +37,13 @@ export default function AppLayout({ children, noPadding }: { children: ReactNode
         <Header style={{ background: '#fff', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', borderBottom: '1px solid #e5e7eb' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <NotificacionesBell />
+            <Button
+              id="btn-tutorial"
+              icon={<QuestionCircleOutlined />}
+              type="text"
+              onClick={() => { reiniciarTutorialDoctora(); window.location.reload() }}
+              title="Ver tutorial"
+            />
             <Button icon={<LogoutOutlined />} type="text" onClick={logout}>Cerrar sesión</Button>
           </div>
         </Header>
