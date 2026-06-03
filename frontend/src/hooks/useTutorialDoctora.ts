@@ -216,7 +216,6 @@ export function useTutorialHonorarios() {
           },
         },
         {
-        {
           popover: {
             title: '🤝 Convenios de descuento',
             description: 'Debajo de las tarifas puedes configurar <b>convenios</b> por categoría:<br>• 1° examen: precio completo<br>• 2° examen del mismo tipo en el caso: precio − descuento 2<br>• 3°+ examen: precio − descuento 3<br><br>El descuento se aplica automáticamente al calcular honorarios.',
