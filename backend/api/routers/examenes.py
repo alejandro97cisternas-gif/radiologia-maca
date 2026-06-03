@@ -235,16 +235,51 @@ def descargar_caso(caso_id: str, request: Request, db: Session = Depends(get_db)
     radiologo = get_tenant(request)
     examenes = _examenes_por_caso(caso_id, radiologo.id, db)
     rut = examenes[0].paciente.rut or f"pac{examenes[0].paciente_id}"
+
+    # Detectar imágenes compartidas (mismo nombre de archivo en varios exámenes)
+    from collections import defaultdict
+    conteo: dict[str, int] = defaultdict(int)
+    for examen in examenes:
+        for img in examen.imagenes:
+            conteo[img.ruta.rsplit("/", 1)[-1]] += 1
+    compartidas = {n for n, c in conteo.items() if c > 1}
+
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        escritas_compartidas: set[str] = set()
         for examen in examenes:
             folder = examen.tipo_examen.replace("/", "-")[:40]
+            propias, refs_compartidas = [], []
             for img in examen.imagenes:
                 nombre = img.ruta.rsplit("/", 1)[-1]
-                try:
-                    zf.writestr(f"{folder}/{nombre}", get_bytes(img.ruta))
-                except Exception:
-                    pass
+                if nombre in compartidas:
+                    refs_compartidas.append(nombre)
+                    if nombre not in escritas_compartidas:
+                        try:
+                            zf.writestr(f"imagenes_compartidas/{nombre}", get_bytes(img.ruta))
+                            escritas_compartidas.add(nombre)
+                        except Exception:
+                            pass
+                else:
+                    propias.append((nombre, img))
+                    try:
+                        zf.writestr(f"{folder}/{nombre}", get_bytes(img.ruta))
+                    except Exception:
+                        pass
+
+            # info.txt de cada examen
+            lineas = [f"Tipo de examen: {examen.tipo_examen}"]
+            if refs_compartidas:
+                lineas.append("\nImágenes compartidas con otros exámenes del caso:")
+                lineas.append("  → carpeta 'imagenes_compartidas/'")
+                for n in refs_compartidas:
+                    lineas.append(f"  • {n}")
+            if propias:
+                lineas.append("\nImágenes exclusivas de este examen:")
+                for n, _ in propias:
+                    lineas.append(f"  • {n}")
+            zf.writestr(f"{folder}/info.txt", "\n".join(lineas))
+
     buf.seek(0)
     return StreamingResponse(
         buf, media_type="application/zip",
