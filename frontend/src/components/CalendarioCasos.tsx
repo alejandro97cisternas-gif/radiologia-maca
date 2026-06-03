@@ -8,19 +8,20 @@ const CL = 'America/Santiago'
 const clDay = (iso: string) => dayjs.utc(iso).tz(CL).format('YYYY-MM-DD')
 const clTime = (iso: string) => dayjs.utc(iso).tz(CL)
 import type { Caso } from '../api/examenes'
-import { descargarCaso } from '../api/examenes'
+import { descargarCaso, isVencido } from '../api/examenes'
 
 type SubVista = 'mes' | 'semana'
 
 // ── Chip compacto para vista mes ──────────────────────────────────────────────
 
 function CasoChip({ caso, orden, onClick }: { caso: Caso; orden: number; onClick: () => void }) {
+  const vencido = isVencido(caso)
   return (
     <div
       onClick={e => { e.stopPropagation(); onClick() }}
       style={{
-        background: '#fff',
-        borderLeft: `3px solid ${caso.derivador_color || '#2563EB'}`,
+        background: vencido ? '#fff5f5' : '#fff',
+        borderLeft: `3px solid ${vencido ? '#ef4444' : (caso.derivador_color || '#2563EB')}`,
         borderRadius: 3,
         padding: '2px 5px',
         marginBottom: 2,
@@ -36,7 +37,7 @@ function CasoChip({ caso, orden, onClick }: { caso: Caso; orden: number; onClick
         {String(orden).padStart(2, '0')}
       </span>
       <Badge
-        status={caso.estado === 'EN_PROCESO' ? 'processing' : 'warning'}
+        status={vencido ? 'error' : caso.estado === 'EN_PROCESO' ? 'processing' : 'warning'}
         style={{ flexShrink: 0 }}
       />
       <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11, color: '#1e3a5f', fontWeight: 600 }}>
@@ -49,12 +50,13 @@ function CasoChip({ caso, orden, onClick }: { caso: Caso; orden: number; onClick
 // ── Card para vista semana ────────────────────────────────────────────────────
 
 function CasoCardSemana({ caso, orden, onClick }: { caso: Caso; orden: number; onClick: () => void }) {
+  const vencido = isVencido(caso)
   return (
     <div
       style={{
-        background: '#fff',
-        border: '1px solid #e2e8f0',
-        borderLeft: `4px solid ${caso.derivador_color || '#e2e8f0'}`,
+        background: vencido ? '#fff5f5' : '#fff',
+        border: vencido ? '1px solid #fca5a5' : '1px solid #e2e8f0',
+        borderLeft: `4px solid ${vencido ? '#ef4444' : (caso.derivador_color || '#e2e8f0')}`,
         borderRadius: 6,
         padding: '8px 10px',
         marginBottom: 6,
@@ -103,6 +105,7 @@ function CasoCardSemana({ caso, orden, onClick }: { caso: Caso; orden: number; o
             </Tooltip>
           )}
           {caso.tiene_informe && <span style={{ color: '#16a34a', fontSize: 12 }}>✓</span>}
+          {vencido && <Tag color="red" style={{ margin: 0, fontSize: 9 }}>+48h</Tag>}
           {caso.incidencia_estado === 'ABIERTA' && <Tag color="error" style={{ margin: 0, fontSize: 10 }}>⚠</Tag>}
         </div>
       </div>

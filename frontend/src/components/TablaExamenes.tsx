@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { Table, Tag, Select, Input, Row, Col, Button, Tooltip, Badge, message } from 'antd'
 import { SearchOutlined, FolderOpenOutlined, DownloadOutlined } from '@ant-design/icons'
 import type { Caso } from '../api/examenes'
-import { descargarCaso } from '../api/examenes'
+import { descargarCaso, isVencido } from '../api/examenes'
 
 const ESTADO_COLOR: Record<string, string> = {
   PENDIENTE: 'orange',
@@ -74,6 +74,7 @@ export default function TablaExamenes({ casos, onOpenCaso }: Props) {
       render: (v: string, c: Caso) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <Badge status={v === 'COMPLETADO' ? 'success' : v === 'EN_PROCESO' ? 'processing' : 'warning'} text={v.replace('_', ' ')} />
+          {isVencido(c) && <Tag color="red" style={{ margin: 0, fontSize: 10 }}>⏰ +48h</Tag>}
           {c.incidencia_estado === 'ABIERTA' && <Tag color="error" style={{ margin: 0, fontSize: 10 }}>⚠ Incidencia</Tag>}
           {c.incidencia_estado === 'RESUELTA' && <Tag color="success" style={{ margin: 0, fontSize: 10 }}>✓ Resuelta</Tag>}
         </div>

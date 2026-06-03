@@ -7,7 +7,7 @@ import {
 } from '@dnd-kit/core'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import type { Caso } from '../api/examenes'
-import { patchEstadoCaso, descargarCaso } from '../api/examenes'
+import { patchEstadoCaso, descargarCaso, isVencido } from '../api/examenes'
 
 type Estado = 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO'
 
@@ -23,6 +23,7 @@ function CasoCard({ caso, onClick, dragging }: { caso: Caso; onClick: () => void
     data: { caso },
   })
   const style = transform ? { transform: `translate(${transform.x}px, ${transform.y}px)` } : undefined
+  const vencido = isVencido(caso)
 
   return (
     <div
@@ -30,9 +31,9 @@ function CasoCard({ caso, onClick, dragging }: { caso: Caso; onClick: () => void
       style={{
         ...style,
         opacity: isDragging ? 0.35 : 1,
-        background: '#fff',
-        border: '1px solid #e2e8f0',
-        borderLeft: `4px solid ${caso.derivador_color || '#e2e8f0'}`,
+        background: vencido ? '#fff5f5' : '#fff',
+        border: vencido ? '1px solid #fca5a5' : '1px solid #e2e8f0',
+        borderLeft: `4px solid ${vencido ? '#ef4444' : (caso.derivador_color || '#e2e8f0')}`,
         borderRadius: 8,
         padding: '10px 12px',
         marginBottom: 8,
@@ -69,6 +70,7 @@ function CasoCard({ caso, onClick, dragging }: { caso: Caso; onClick: () => void
             {new Date(caso.creado_en).toLocaleDateString('es-CL')}
             {' · '}{caso.imagenes_count} img
           </Typography.Text>
+          {vencido && <Tag color="red" style={{ margin: 0, fontSize: 10 }}>⏰ +48h</Tag>}
           {caso.incidencia_estado === 'ABIERTA' && <Tag color="error" style={{ margin: 0, fontSize: 10 }}>⚠ Incidencia</Tag>}
           {caso.incidencia_estado === 'RESUELTA' && <Tag color="success" style={{ margin: 0, fontSize: 10 }}>✓ Resuelta</Tag>}
         </div>

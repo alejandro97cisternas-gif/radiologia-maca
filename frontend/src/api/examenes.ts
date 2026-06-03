@@ -90,6 +90,13 @@ export interface ExamenDetalle extends Examen {
   imagenes: ImagenExamen[]
 }
 
+const LIMITE_HORAS = 48
+
+export function isVencido(caso: Caso): boolean {
+  if (caso.estado === 'COMPLETADO') return false
+  return Date.now() - new Date(caso.creado_en).getTime() > LIMITE_HORAS * 3_600_000
+}
+
 export const getTodosExamenes = () =>
   api.get<Examen[]>('/api/examenes/todos').then(r => r.data)
 
