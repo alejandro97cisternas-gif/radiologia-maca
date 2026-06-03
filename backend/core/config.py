@@ -15,6 +15,9 @@ class Settings(BaseSettings):
 
     RESEND_API_KEY: str = ""
     EMAIL_FROM: str = "Dra. Habash <notificaciones@novex.cloud>"
+    # Dirección base para construir el From dinámico por tenant.
+    # Si está vacío se extrae de EMAIL_FROM.
+    EMAIL_ADDRESS: str = ""
 
     # SMTP (Gmail u otro proveedor como alternativa a Resend)
     SMTP_HOST: str = "smtp.gmail.com"

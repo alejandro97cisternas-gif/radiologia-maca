@@ -74,21 +74,37 @@ def _p(text: str) -> str:
     return f"<p style='margin:0 0 16px;font-size:14px;color:#475569;line-height:1.6;'>{text}</p>"
 
 
+def _from_addr(nombre: str | None) -> str:
+    """Construye 'Nombre <direccion>' dinámicamente por tenant."""
+    import re
+    base = settings.EMAIL_ADDRESS
+    if not base:
+        # Extrae la dirección del EMAIL_FROM: "Nombre <addr>" → "addr"
+        m = re.search(r"<(.+?)>", settings.EMAIL_FROM)
+        base = m.group(1) if m else settings.EMAIL_FROM
+    if nombre:
+        return f"{nombre} <{base}>"
+    return settings.EMAIL_FROM
+
+
 def _send(to: str, subject: str, html: str,
-          attachments: list[tuple[str, bytes, str]] | None = None) -> tuple[bool, str]:
+          attachments: list[tuple[str, bytes, str]] | None = None,
+          from_name: str | None = None) -> tuple[bool, str]:
     if not email_configurado():
         return False, "Email no configurado (falta RESEND_API_KEY o SMTP_USER/SMTP_PASSWORD)."
 
+    from_addr = _from_addr(from_name)
     if settings.RESEND_API_KEY:
-        return _send_resend(to, subject, html, attachments)
-    return _send_smtp(to, subject, html, attachments)
+        return _send_resend(to, subject, html, attachments, from_addr)
+    return _send_smtp(to, subject, html, attachments, from_addr)
 
 
 def _send_resend(to: str, subject: str, html: str,
-                 attachments: list[tuple[str, bytes, str]] | None = None) -> tuple[bool, str]:
+                 attachments: list[tuple[str, bytes, str]] | None = None,
+                 from_addr: str | None = None) -> tuple[bool, str]:
     resend.api_key = settings.RESEND_API_KEY
     params: resend.Emails.SendParams = {
-        "from": settings.EMAIL_FROM,
+        "from": from_addr or settings.EMAIL_FROM,
         "to": [to],
         "subject": subject,
         "html": html,
@@ -107,7 +123,8 @@ def _send_resend(to: str, subject: str, html: str,
 
 
 def _send_smtp(to: str, subject: str, html: str,
-               attachments: list[tuple[str, bytes, str]] | None = None) -> tuple[bool, str]:
+               attachments: list[tuple[str, bytes, str]] | None = None,
+               from_addr: str | None = None) -> tuple[bool, str]:
     import smtplib
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
@@ -115,7 +132,7 @@ def _send_smtp(to: str, subject: str, html: str,
     from email import encoders
 
     msg = MIMEMultipart("mixed")
-    msg["From"] = settings.SMTP_USER
+    msg["From"] = from_addr or settings.SMTP_USER
     msg["To"] = to
     msg["Subject"] = subject
     msg.attach(MIMEText(html, "html", "utf-8"))
@@ -154,7 +171,7 @@ def enviar_magic_link_portal(derivador, link: str, radiologo_nombre: str = "Radi
         + _btn("Ingresar al portal", link)
         + _p(f"<span style='font-size:11px;color:#94A3B8;'>Enlace: {link}</span>")
     )
-    return _send(derivador.email, f"Acceso a su Portal · {radiologo_nombre}", _html(body))
+    return _send(derivador.email, f"Acceso a su Portal · {radiologo_nombre}", _html(body), from_name=radiologo_nombre or None)
 
 
 def enviar_tarea_pendiente_a_doctora(derivador, paciente, examen, radiologo_email: str = "") -> tuple[bool, str]:
@@ -175,6 +192,7 @@ def enviar_tarea_pendiente_a_doctora(derivador, paciente, examen, radiologo_emai
         f"Nueva tarea: {examen.tipo_examen} · {paciente.nombre_completo}",
         _html(body),
     )
+
 
 
 def enviar_informe_listo_a_derivador(
@@ -198,6 +216,7 @@ def enviar_informe_listo_a_derivador(
         derivador.email,
         f"Informe listo · {paciente.nombre_completo} · {examen.tipo_examen} · {radiologo_nombre}",
         _html(body),
+        from_name=radiologo_nombre or None,
     )
 
 
@@ -212,7 +231,7 @@ def enviar_honorarios(derivador, periodo: str, pdf_bytes: bytes) -> tuple[bool, 
     nombre_archivo = f"honorarios_{derivador.id}_{periodo}.pdf"
     return _send(
         derivador.email,
-        f"Honorarios {periodo} · Dra. Macarena",
+        f"Honorarios {periodo}",
         _html(body),
         attachments=[("application/pdf", pdf_bytes, nombre_archivo)],
     )
