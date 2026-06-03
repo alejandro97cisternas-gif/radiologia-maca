@@ -202,11 +202,11 @@ function CardExamen({
           }
           style={{ flex: 1 }}
           options={(() => {
-            const categorias = [...new Set(tipos.map(t => t.categoria || 'General'))]
+            const categorias = [...new Set(tipos.map(t => t.categoria).filter(Boolean))]
             return categorias.map(cat => ({
               label: cat,
               options: tipos
-                .filter(t => (t.categoria || 'General') === cat)
+                .filter(t => t.categoria === cat)
                 .map(t => ({ value: t.nombre, label: t.nombre })),
             }))
           })()}

@@ -61,14 +61,22 @@ CATALOGO = (
 
 
 def seed_tipos_examen(radiologo_id: int, db) -> None:
-    """Crea los tipos de examen por defecto para un radiólogo recién creado."""
+    """Crea o actualiza los tipos de examen para un radiólogo."""
     from modulos.examenes.models import TipoExamenCustom
 
-    existentes = {
-        t.nombre for t in db.query(TipoExamenCustom)
-        .filter(TipoExamenCustom.radiologo_id == radiologo_id).all()
-    }
+    catalogo_map = {nombre: (dimension, categoria) for nombre, dimension, categoria in CATALOGO}
 
+    existentes = db.query(TipoExamenCustom).filter(TipoExamenCustom.radiologo_id == radiologo_id).all()
+    existentes_nombres = {t.nombre for t in existentes}
+
+    # Actualizar categoría de tipos que ya existen pero tienen categoria=None o incorrecta
+    for t in existentes:
+        if t.nombre in catalogo_map:
+            _, cat = catalogo_map[t.nombre]
+            if t.categoria != cat:
+                t.categoria = cat
+
+    # Agregar tipos faltantes
     nuevos = [
         TipoExamenCustom(
             radiologo_id=radiologo_id,
@@ -78,9 +86,9 @@ def seed_tipos_examen(radiologo_id: int, db) -> None:
             activo=True,
         )
         for nombre, dimension, categoria in CATALOGO
-        if nombre not in existentes
+        if nombre not in existentes_nombres
     ]
 
     if nuevos:
         db.add_all(nuevos)
-        db.commit()
+    db.commit()
