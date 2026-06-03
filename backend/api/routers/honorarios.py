@@ -28,7 +28,7 @@ def _calcular_detalle(derivador_id: int, periodo: str, db: Session, radiologo_id
     examenes = (db.query(Examen)
                 .filter(Examen.derivador_id == derivador_id, Examen.estado == "COMPLETADO",
                         Examen.completado_en >= inicio, Examen.completado_en < fin).all())
-    tarifas = {t.tipo_examen: int(t.precio) for t in db.query(TarifaDerivador).filter(TarifaDerivador.derivador_id == derivador_id).all()}
+    tarifas = {t.tipo_examen.upper(): int(t.precio) for t in db.query(TarifaDerivador).filter(TarifaDerivador.derivador_id == derivador_id).all()}
 
     convenios = {
         c.categoria: c
@@ -38,7 +38,7 @@ def _calcular_detalle(derivador_id: int, periodo: str, db: Session, radiologo_id
             Convenio.activo == True,
         ).all()
     }
-    cat_map = {t.nombre: t.categoria for t in db.query(TipoExamenCustom).filter(TipoExamenCustom.radiologo_id == radiologo_id).all()}
+    cat_map = {t.nombre.upper(): t.categoria for t in db.query(TipoExamenCustom).filter(TipoExamenCustom.radiologo_id == radiologo_id).all()}
 
     casos: dict[str, list] = {}
     for e in examenes:
@@ -49,8 +49,8 @@ def _calcular_detalle(derivador_id: int, periodo: str, db: Session, radiologo_id
     for caso_examenes in casos.values():
         cat_count: dict[str, int] = {}
         for e in sorted(caso_examenes, key=lambda x: x.id):
-            precio_base = tarifas.get(e.tipo_examen, 0)
-            cat = cat_map.get(e.tipo_examen)
+            precio_base = tarifas.get(e.tipo_examen.upper(), 0)
+            cat = cat_map.get(e.tipo_examen.upper())
             descuento = 0
             if cat and cat in convenios:
                 conv = convenios[cat]
