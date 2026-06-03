@@ -241,17 +241,34 @@ def enviar_honorarios(derivador, periodo: str, pdf_bytes: bytes, radiologo_nombr
     )
 
 
+def _fila_informe(tipo_examen: str, link_pdf: str) -> str:
+    return f"""<tr>
+  <td style="padding:7px 12px;font-size:12px;color:#0F172A;border-bottom:1px solid #E2E8F0;">{tipo_examen}</td>
+  <td style="padding:7px 12px;border-bottom:1px solid #E2E8F0;text-align:right;">
+    <a href="{link_pdf}" style="display:inline-block;padding:5px 14px;background:#1e3a5f;color:#FFF;
+       font-size:11px;font-weight:700;text-decoration:none;font-family:Arial,sans-serif;">
+      Descargar PDF →
+    </a>
+  </td>
+</tr>"""
+
+
 def enviar_caso_listo_a_derivador(
     derivador, paciente, examenes: list, link_portal: str, radiologo_nombre: str = "Radiología"
 ) -> tuple[bool, str]:
     if not derivador.email:
         return False, "Derivador sin email."
-    filas = [_row("Examen", e.tipo_examen) for e in examenes]
+    filas = [_fila_informe(e["tipo_examen"], e["link_pdf"]) for e in examenes]
+    tabla = (
+        "<table cellpadding='0' cellspacing='0' width='100%' "
+        "style='margin-top:20px;border:1px solid #E2E8F0;border-collapse:collapse;'>"
+        + "".join(filas) + "</table>"
+    )
     body = (
         _h("Informes listos")
         + _p(f"Dr./Dra. <strong>{derivador.nombre}</strong>, los informes de su paciente "
              f"<strong>{paciente.nombre_completo}</strong> están disponibles.")
-        + _table(*filas)
+        + tabla
         + _btn("Ver en el portal", link_portal)
     )
     titulo = f"Radiología · {radiologo_nombre}" if radiologo_nombre else "Radiología"

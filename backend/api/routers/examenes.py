@@ -232,8 +232,12 @@ def notificar_derivador(caso_id: str, request: Request, db: Session = Depends(ge
         raise HTTPException(400, "Faltan informes por subir")
 
     link_portal = _generar_magic_link(examenes[0].derivador_id, radiologo.slug, db)
+    examenes_con_links = [
+        {"tipo_examen": e.tipo_examen, "link_pdf": get_url(e.informe.ruta_pdf)}
+        for e in examenes
+    ]
     ok, msg = enviar_caso_listo_a_derivador(
-        examenes[0].derivador, examenes[0].paciente, examenes, link_portal,
+        examenes[0].derivador, examenes[0].paciente, examenes_con_links, link_portal,
         radiologo_nombre=radiologo.nombre_display or "Radiología",
     )
     if ok:
