@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     BASE_DOMAIN: str = "localhost"  # tudominio.com en producción
 
     RESEND_API_KEY: str = ""
-    EMAIL_FROM: str = "Dra. Habash <notificaciones@novex.cloud>"
+    EMAIL_FROM: str = "Novex Radiología <notificaciones@novex.cloud>"
     # Dirección base para construir el From dinámico por tenant.
     # Si está vacío se extrae de EMAIL_FROM.
     EMAIL_ADDRESS: str = ""

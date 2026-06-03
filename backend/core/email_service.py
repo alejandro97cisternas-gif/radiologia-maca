@@ -171,7 +171,7 @@ def enviar_magic_link_portal(derivador, link: str, radiologo_nombre: str = "Radi
         + _btn("Ingresar al portal", link)
         + _p(f"<span style='font-size:11px;color:#94A3B8;'>Enlace: {link}</span>")
     )
-    return _send(derivador.email, f"Acceso a su Portal · {radiologo_nombre}", _html(body), from_name=radiologo_nombre or None)
+    return _send(derivador.email, f"Acceso a su Portal · {radiologo_nombre}", _html(body))
 
 
 def enviar_tarea_pendiente_a_doctora(derivador, paciente, examen, radiologo_email: str = "") -> tuple[bool, str]:
@@ -203,7 +203,8 @@ def enviar_informe_listo_a_derivador(
     body = (
         _h("Informe listo")
         + _p(f"Dr./Dra. <strong>{derivador.nombre}</strong>, el informe de su paciente "
-             f"<strong>{paciente.nombre_completo}</strong> está disponible.")
+             f"<strong>{paciente.nombre_completo}</strong> está disponible, "
+             f"emitido por <strong>{radiologo_nombre}</strong>.")
         + _table(
             _row("Paciente", paciente.nombre_completo),
             _row("RUT", paciente.rut or "-"),
@@ -214,9 +215,8 @@ def enviar_informe_listo_a_derivador(
     )
     return _send(
         derivador.email,
-        f"Informe listo · {paciente.nombre_completo} · {examen.tipo_examen} · {radiologo_nombre}",
+        f"Informe listo · {paciente.nombre_completo} · {examen.tipo_examen}",
         _html(body),
-        from_name=radiologo_nombre or None,
     )
 
 
