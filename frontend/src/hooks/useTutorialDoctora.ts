@@ -40,15 +40,23 @@ export function useTutorialDashboard(loading: boolean) {
           element: '#vista-selector',
           popover: {
             title: '📊 Vistas del dashboard',
-            description: '<b>Board</b>: vista kanban con columnas por estado.<br><b>Tabla</b>: listado con filtros.<br><b>Calendario</b>: exámenes por día del mes.',
+            description: '<b>Calendario</b> (vista principal): casos por día en vista mes o semana.<br><b>Board</b>: kanban por estado (Pendiente / En proceso / Completado).<br><b>Tabla</b>: listado con filtros de búsqueda.',
+            side: 'bottom',
+          },
+        },
+        {
+          element: '#vista-selector',
+          popover: {
+            title: '📅 Vista Calendario',
+            description: 'Alterna entre <b>Mes</b> y <b>Semana</b>. Cada caso aparece el día que lo envió el derivador.<br><br>Los casos están ordenados por <b>orden de llegada</b> (🕐 #01 = más antiguo, tiene prioridad). Las horas usan <b>zona horaria Chile</b>.',
             side: 'bottom',
           },
         },
         {
           element: '#board-pendiente',
           popover: {
-            title: '🟡 Exámenes Pendientes',
-            description: 'Aquí llegan los nuevos casos enviados por tus derivadores. <b>Al hacer clic en una tarjeta</b> la pasas automáticamente a "En Proceso" y se abre el panel de detalle.',
+            title: '🟡 Casos Pendientes',
+            description: 'Cada tarjeta representa un <b>caso completo</b> — puede contener varios exámenes (ej: Análisis de Ricketts + CBCT-LOC). <b>Al hacer clic</b> el caso pasa automáticamente a "En Proceso" y se abre el panel de detalle.',
             side: 'right',
           },
         },
@@ -56,7 +64,7 @@ export function useTutorialDashboard(loading: boolean) {
           element: '#board-en-proceso',
           popover: {
             title: '🔵 En Proceso',
-            description: 'Exámenes que estás trabajando. Puedes <b>arrastrar tarjetas</b> entre columnas o cambiar el estado desde el panel de detalle.',
+            description: 'Casos que estás trabajando. Puedes <b>arrastrar</b> entre columnas para cambiar el estado de todos los exámenes del caso a la vez.',
             side: 'right',
           },
         },
@@ -64,15 +72,15 @@ export function useTutorialDashboard(loading: boolean) {
           element: '#board-completado',
           popover: {
             title: '✅ Completados',
-            description: 'Exámenes con informe subido. El derivador recibe una notificación automática por email con el enlace al PDF.',
+            description: 'Casos con todos los informes subidos. El derivador recibe notificación automática por email al completar cada informe.',
             side: 'left',
           },
         },
         {
           element: '#board-pendiente',
           popover: {
-            title: '📋 Panel de examen',
-            description: 'Al hacer clic en una tarjeta verás:<br>• <b>Imágenes</b> por tipo (2D, DICOM, Preview)<br>• Botón <b>Descargar ZIP</b> con todas las imágenes<br>• Botón <b>Subir informe PDF</b> — al subirlo el examen pasa a Completado y se notifica al derivador<br>• <b>Incidencias</b> si el derivador reportó algún problema',
+            title: '📋 Panel del caso',
+            description: 'Al abrir un caso verás <b>una sección por cada examen</b>:<br>• Pestaña <b>Imágenes 2D</b> y <b>DICOM</b><br>• Botón <b>Subir informe PDF</b> individual por examen<br>• Botón <b>Descargar ZIP</b> (una carpeta por tipo de examen)<br>• <b>Incidencias</b> por examen',
             side: 'top',
           },
         },
@@ -80,7 +88,7 @@ export function useTutorialDashboard(loading: boolean) {
           element: '#board-pendiente',
           popover: {
             title: '🔢 Versiones',
-            description: 'Las tarjetas muestran una etiqueta de versión (<b>v0, v1, v2...</b>). Si ves <b>v1+</b> en naranja, el derivador actualizó las imágenes del caso.',
+            description: 'Cada examen muestra su versión (<b>v0, v1…</b>). Si ves <b>v1+</b> en naranja, el derivador actualizó las imágenes de ese examen.',
             side: 'top',
             onNextClick: () => {
               completado = true
@@ -226,7 +234,15 @@ export function useTutorialHonorarios() {
           element: '#honorarios-tabs',
           popover: {
             title: '➕ Configurar tarifas',
-            description: 'Al final de cada pestaña hay una sección de tarifas. Aquí defines el precio de cada tipo de examen para esa clínica.<br><br>Puedes agregar tipos existentes (PANO, CBCT…) o <b>crear nuevos</b> con su dimensión (2D, 3D o Ambos) y precio en CLP.',
+            description: 'Al final de cada pestaña puedes:<br>• <b>Agregar examen</b>: precio individual con búsqueda inteligente (busca por palabras, sin tildes)<br>• <b>Por categoría</b>: aplica el mismo precio a todos los exámenes de una categoría (ej: todos los Análisis de Cefalometría)<br><br>Solo los tipos con tarifa configurada estarán disponibles para ese centro.',
+            side: 'top',
+          },
+        },
+        {
+          element: '#honorarios-tabs',
+          popover: {
+            title: '🤝 Convenios de descuento',
+            description: 'Debajo de las tarifas puedes configurar <b>convenios</b> por categoría:<br>• 1° examen: precio completo<br>• 2° examen del mismo tipo en el caso: precio − descuento 2<br>• 3°+ examen: precio − descuento 3<br><br>El descuento se aplica automáticamente al calcular honorarios.',
             side: 'top',
             onNextClick: () => {
               completado = true

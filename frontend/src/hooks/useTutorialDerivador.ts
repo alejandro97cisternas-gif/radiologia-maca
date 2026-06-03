@@ -55,7 +55,7 @@ export function useTutorialDerivador(skip = false) {
             element: '#portal-board',
             popover: {
               title: 'Tus casos',
-              description: 'Cada tarjeta representa un examen. Haz clic en una tarjeta para ver las imágenes, modificar archivos o ver el informe cuando esté listo.',
+              description: 'Cada tarjeta representa un <b>caso completo</b>. Si enviaste varios exámenes juntos (ej: Ricketts + CBCT-LOC), aparecen agrupados en una sola tarjeta.<br><br>Haz clic para ver el detalle de cada examen, sus imágenes y el informe cuando esté listo.',
               side: 'top',
             },
           },
@@ -130,7 +130,7 @@ const PASOS_CONFIG = [
         element: '#selector-tipo',
         popover: {
           title: '🩻 Paso 2 — Tipo de examen',
-          description: 'Selecciona el tipo de examen solicitado. Los exámenes están organizados por dimensión:<br>• <b>2D</b>: PANO, RETRO, BW-UNI…<br>• <b>3D (CBCT)</b>: requiere archivos DICOM<br>• <b>2D + 3D</b>: requiere ambos tipos de archivo',
+          description: 'Selecciona el tipo de examen solicitado. El listado muestra <b>solo los exámenes habilitados para tu clínica</b> por la doctora.<br><br>Están agrupados por categoría (Análisis de Cefalometría, CBCT…) y puedes buscar escribiendo sin preocuparte por tildes.',
           side: 'bottom' as const,
         },
       },
@@ -145,8 +145,8 @@ const PASOS_CONFIG = [
       {
         element: '#btn-agregar-otro',
         popover: {
-          title: '➕ Múltiples exámenes',
-          description: 'Puedes agregar varios exámenes al mismo caso. Por ejemplo PANO + CBCT en una sola visita.',
+          title: '➕ Múltiples exámenes en un caso',
+          description: 'Puedes agregar varios exámenes al mismo caso (ej: Ricketts + CBCT-LOC en una sola visita). La doctora los verá agrupados como <b>1 sola tarea</b> y recibirás un informe por cada examen.',
           side: 'top' as const,
         },
       },
