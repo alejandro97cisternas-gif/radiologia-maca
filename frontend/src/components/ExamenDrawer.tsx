@@ -69,12 +69,10 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
     setUploading(examenId)
     try {
       await subirInforme(examenId, file)
-      onUpdate()
-      // Reload caso detail
       if (caso) {
         const data = await getCasoDetalle(caso.caso_id)
         setExamenes(data.examenes as ExamenConImagenes[])
-          message.success('Informe subido correctamente')
+        message.success('Informe subido correctamente')
       }
     } catch {
       message.error('Error al subir el informe')
@@ -82,6 +80,11 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
       setUploading(null)
     }
     return false
+  }
+
+  const handleClose = () => {
+    onUpdate()
+    onClose()
   }
 
   const todosConInforme = examenes.length > 0 && examenes.every(e => e.tiene_informe)
@@ -95,7 +98,6 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
       message.success('Informes enviados al derivador')
       const data = await getCasoDetalle(caso.caso_id)
       setExamenes(data.examenes as ExamenConImagenes[])
-      onUpdate()
     } catch {
       message.error('Error al enviar al derivador')
     } finally {
@@ -106,7 +108,7 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
   return (
     <Drawer
       open={!!caso}
-      onClose={onClose}
+      onClose={handleClose}
       width={720}
       extra={
         caso ? (
