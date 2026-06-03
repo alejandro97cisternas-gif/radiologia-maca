@@ -1,28 +1,23 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { Segmented, Typography, Spin, Badge, Calendar } from 'antd'
+import { Segmented, Typography, Spin } from 'antd'
 import { useTutorialDashboard } from '../hooks/useTutorialDoctora'
 import { TableOutlined, AppstoreOutlined, CalendarOutlined } from '@ant-design/icons'
 import PanelIncidencias from '../components/PanelIncidencias'
-import type { Dayjs } from 'dayjs'
-import dayjs from 'dayjs'
 import type { Examen, Caso } from '../api/examenes'
 import { getTodosExamenes, agruparEnCasos } from '../api/examenes'
-import { getCalendario } from '../api/dashboard'
 import TablaExamenes from '../components/TablaExamenes'
 import BoardExamenes from '../components/BoardExamenes'
+import CalendarioCasos from '../components/CalendarioCasos'
 import ExamenDrawer from '../components/ExamenDrawer'
 
 type Vista = 'tabla' | 'board' | 'calendario'
 
 
 export default function Dashboard() {
-  const [vista, setVista] = useState<Vista>('board')
+  const [vista, setVista] = useState<Vista>('calendario')
   const [examenes, setExamenes] = useState<Examen[]>([])
   const [loading, setLoading] = useState(true)
   const [casoAbierto, setCasoAbierto] = useState<Caso | null>(null)
-
-  const [mes, setMes] = useState(dayjs().format('YYYY-MM'))
-  const [calendario, setCalendario] = useState<Record<string, any[]>>({})
 
   useTutorialDashboard(loading)
 
@@ -36,11 +31,6 @@ export default function Dashboard() {
   }, [])
 
   useEffect(() => { cargar() }, [cargar])
-
-  useEffect(() => {
-    if (vista !== 'calendario') return
-    getCalendario(mes).then(d => setCalendario(d.dias || {}))
-  }, [vista, mes])
 
   const handleOpenCaso = (c: Caso) => {
     if (c.estado === 'PENDIENTE') {
@@ -87,9 +77,9 @@ export default function Dashboard() {
           value={vista}
           onChange={v => setVista(v as Vista)}
           options={[
+            { value: 'calendario', icon: <CalendarOutlined />, label: 'Calendario' },
             { value: 'board',      icon: <AppstoreOutlined />, label: 'Board'      },
             { value: 'tabla',      icon: <TableOutlined />,    label: 'Tabla'      },
-            { value: 'calendario', icon: <CalendarOutlined />, label: 'Calendario' },
           ]}
           size="middle"
         />
@@ -100,24 +90,14 @@ export default function Dashboard() {
           <div style={{ textAlign: 'center', paddingTop: 80 }}><Spin size="large" /></div>
         ) : (
           <>
+            {vista === 'calendario' && (
+              <CalendarioCasos casos={casos} onOpenCaso={handleOpenCaso} />
+            )}
             {vista === 'board' && (
               <BoardExamenes casos={casos} onOpenCaso={handleOpenCaso} onUpdate={cargar} />
             )}
             {vista === 'tabla' && (
               <TablaExamenes casos={casos} onOpenCaso={handleOpenCaso} onUpdate={cargar} />
-            )}
-            {vista === 'calendario' && (
-              <div style={{ maxWidth: 800 }}>
-                <Calendar
-                  fullscreen={false}
-                  cellRender={cellRender}
-                  onPanelChange={d => setMes(d.format('YYYY-MM'))}
-                  style={{ border: '1px solid #e2e8f0', borderRadius: 8 }}
-                />
-                <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
-                  Los badges muestran casos pendientes/en proceso por día.
-                </Typography.Text>
-              </div>
             )}
           </>
         )}
