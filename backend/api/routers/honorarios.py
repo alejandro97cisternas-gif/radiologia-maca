@@ -324,12 +324,16 @@ def _generar_pdf(derivador, honorario, periodo: str) -> bytes:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     import io
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=40, bottomMargin=40, leftMargin=50, rightMargin=50)
     styles = getSampleStyleSheet()
+
+    cell_style = ParagraphStyle("cell", fontName="Helvetica", fontSize=8, leading=10, wordWrap="CJK")
+    bold_style = ParagraphStyle("bold_cell", fontName="Helvetica-Bold", fontSize=8, leading=10)
+
     elements = [
         Paragraph(f"Honorarios — {derivador.nombre}", styles["Heading1"]),
         Paragraph(f"Período: {periodo}", styles["Normal"]),
@@ -337,20 +341,36 @@ def _generar_pdf(derivador, honorario, periodo: str) -> bytes:
     ]
 
     detalle = json.loads(honorario.detalle_json or "[]")
-    data = [["Fecha", "Paciente", "Examen", "Precio"]]
+    # A4 usable width = 495pt (595 - 50L - 50R)
+    data = [[
+        Paragraph("<b>Fecha</b>", bold_style),
+        Paragraph("<b>Paciente</b>", bold_style),
+        Paragraph("<b>Examen</b>", bold_style),
+        Paragraph("<b>Precio</b>", bold_style),
+    ]]
     for item in detalle:
-        data.append([item["fecha"], item["paciente"], item["tipo_examen"], f"${item['precio']:,}"])
-    data.append(["", "", "TOTAL", f"${int(honorario.total):,}"])
+        data.append([
+            Paragraph(item["fecha"], cell_style),
+            Paragraph(item["paciente"], cell_style),
+            Paragraph(item["tipo_examen"], cell_style),
+            Paragraph(f"${item['precio']:,}", cell_style),
+        ])
+    data.append([
+        Paragraph("", cell_style), Paragraph("", cell_style),
+        Paragraph("<b>TOTAL</b>", bold_style),
+        Paragraph(f"<b>${int(honorario.total):,}</b>", bold_style),
+    ])
 
-    tabla = Table(data, colWidths=[80, 200, 100, 80])
+    tabla = Table(data, colWidths=[65, 155, 195, 80])
     tabla.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2563EB")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
         ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EFF6FF")),
         ("ALIGN", (-1, 0), (-1, -1), "RIGHT"),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
     elements.append(tabla)
     doc.build(elements)

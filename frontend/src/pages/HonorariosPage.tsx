@@ -4,7 +4,7 @@ import {
   Tabs, Table, Typography, Button, Select, Statistic, Card, Row, Col,
   Tag, message, Spin, Divider, InputNumber, Space, Modal, Form, Popconfirm,
 } from 'antd'
-import { SendOutlined, CalculatorOutlined, EyeOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons'
+import { SendOutlined, CalculatorOutlined, EyeOutlined, PlusOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import {
   getHonorariosGlobal, getHonorariosDerivador, generarHonorarios,
@@ -461,6 +461,24 @@ export default function HonorariosPage() {
     }
   }
 
+  const handleDescargarCSV = (id: number) => {
+    const det = detalles[id]?.detalle || []
+    if (!det.length) { message.warning('No hay datos para este período'); return }
+    const nombre = derivadores.find(d => d.id === id)?.nombre || String(id)
+    const filas = [
+      ['Fecha', 'Paciente', 'Tipo de examen', 'Precio base', 'Descuento', 'Precio final'],
+      ...det.map((e: any) => [e.fecha, e.paciente, e.tipo_examen, e.precio_base, e.descuento, e.precio]),
+    ]
+    const csv = filas.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `honorarios_${nombre.replace(/\s+/g, '_')}_${periodo}.csv`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   const handleEnviar = async (id: number) => {
     setLoading(true)
     try {
@@ -618,6 +636,13 @@ export default function HonorariosPage() {
                     onClick={() => handlePreview(d.id)}
                   >
                     Vista previa
+                  </Button>
+                  <Button
+                    icon={<DownloadOutlined />}
+                    onClick={() => handleDescargarCSV(d.id)}
+                    disabled={!detalle?.detalle?.length}
+                  >
+                    CSV
                   </Button>
                   <Button
                     id="btn-enviar-clinica"
