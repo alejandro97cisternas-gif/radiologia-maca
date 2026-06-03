@@ -220,7 +220,7 @@ def enviar_informe_listo_a_derivador(
     )
 
 
-def enviar_honorarios(derivador, periodo: str, pdf_bytes: bytes) -> tuple[bool, str]:
+def enviar_honorarios(derivador, periodo: str, pdf_bytes: bytes, radiologo_nombre: str = "") -> tuple[bool, str]:
     if not derivador.email:
         return False, "Derivador sin email."
     body = (
@@ -234,15 +234,16 @@ def enviar_honorarios(derivador, periodo: str, pdf_bytes: bytes) -> tuple[bool, 
         f"Honorarios {periodo}",
         _html(body),
         attachments=[("application/pdf", pdf_bytes, nombre_archivo)],
+        from_name=radiologo_nombre or None,
     )
 
 
-def enviar_incidencia_a_derivador(derivador, paciente, examen, comentario: str) -> tuple[bool, str]:
+def enviar_incidencia_a_derivador(derivador, paciente, examen, comentario: str, radiologo_nombre: str = "") -> tuple[bool, str]:
     if not derivador.email:
         return False, "Derivador sin email."
     body = (
         _h("Incidencia en un examen")
-        + _p(f"Dr./Dra. <strong>{derivador.nombre}</strong>, la Dra. Macarena ha registrado "
+        + _p(f"Dr./Dra. <strong>{derivador.nombre}</strong>, se ha registrado "
              f"una incidencia en el siguiente examen.")
         + _table(
             _row("Paciente", paciente.nombre_completo),
@@ -256,4 +257,5 @@ def enviar_incidencia_a_derivador(derivador, paciente, examen, comentario: str) 
         derivador.email,
         f"Incidencia · {paciente.nombre_completo} · {examen.tipo_examen}",
         _html(body),
+        from_name=radiologo_nombre or None,
     )

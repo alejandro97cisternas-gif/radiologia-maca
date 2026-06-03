@@ -52,7 +52,8 @@ def crear_incidencia(examen_id: int, body: IncidenciaCreate, request: Request, d
     db.add(inc)
     db.commit()
     db.refresh(inc)
-    enviar_incidencia_a_derivador(examen.derivador, examen.paciente, examen, body.comentario_doctora)
+    radiologo = get_tenant(request)
+    enviar_incidencia_a_derivador(examen.derivador, examen.paciente, examen, body.comentario_doctora, radiologo_nombre=radiologo.nombre_display or "")
     return _serializar(inc)
 
 

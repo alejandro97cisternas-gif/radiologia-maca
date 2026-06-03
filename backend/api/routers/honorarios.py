@@ -137,7 +137,7 @@ def enviar(derivador_id: int, request: Request, periodo: str = Query(...), db: S
     if not honorario:
         raise HTTPException(400, "Primero genere los honorarios del período")
     pdf_bytes = _generar_pdf(derivador, honorario, periodo)
-    ok, msg = enviar_honorarios(derivador, periodo, pdf_bytes)
+    ok, msg = enviar_honorarios(derivador, periodo, pdf_bytes, radiologo_nombre=radiologo.nombre_display or "")
     if ok:
         honorario.estado = "ENVIADO"
         honorario.enviado_en = datetime.now(timezone.utc)
