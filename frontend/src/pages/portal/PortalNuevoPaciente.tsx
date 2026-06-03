@@ -364,9 +364,13 @@ export default function PortalNuevoPaciente() {
     ])
   }
 
-  const examenesListos = examenes.filter(
-    c => c.examen_id && c.archivos.some(a => a.estado === 'ok')
-  )
+  const liderTieneArchivos = examenes[0]?.archivos.some(a => a.estado === 'ok') ?? false
+
+  const examenesListos = examenes.filter(c => {
+    if (!c.examen_id) return false
+    if (c.archivos.some(a => a.estado === 'ok')) return true
+    return replicar && liderTieneArchivos  // secundario con imágenes replicadas al backend
+  })
   const puedeNotificar = examenesListos.length > 0
 
   // ── Paso 0: RUT autocomplete ──────────────────────────────────────────────
@@ -567,18 +571,24 @@ export default function PortalNuevoPaciente() {
 
             {/* Lista de exámenes */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
-              {examenesListos.map(e => {
+              {examenesListos.map((e, idx) => {
                 const imgs = e.archivos.filter(a => a.estado === 'ok')
                 const previews = imgs.filter(a => a.preview)
+                const esReplicado = replicar && idx > 0 && imgs.length === 0
                 return (
                   <div key={e.uid} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: previews.length ? 10 : 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: (previews.length || esReplicado) ? 8 : 0 }}>
                       <Tag color="blue">{e.tipo_examen}</Tag>
                       <Tag color={dimension(e.tipo_examen, tiposMap) === '3D' ? 'purple' : 'cyan'}>{dimension(e.tipo_examen, tiposMap)}</Tag>
                       <Typography.Text style={{ fontSize: 12, color: '#6b7280' }}>
-                        {imgs.length} archivo{imgs.length !== 1 ? 's' : ''}
+                        {esReplicado ? 'Imágenes replicadas' : `${imgs.length} archivo${imgs.length !== 1 ? 's' : ''}`}
                       </Typography.Text>
                     </div>
+                    {esReplicado && (
+                      <Typography.Text style={{ fontSize: 11, color: '#16a34a' }}>
+                        ↩ Las imágenes se han replicado desde el primer examen del caso.
+                      </Typography.Text>
+                    )}
                     {previews.length > 0 && (
                       <Image.PreviewGroup>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
