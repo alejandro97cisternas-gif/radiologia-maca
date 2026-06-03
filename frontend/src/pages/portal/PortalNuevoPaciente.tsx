@@ -3,7 +3,7 @@ import { useTutorialNuevoCaso, reiniciarTutorialNuevoCaso } from '../../hooks/us
 import {
   Steps, Form, Input, Button, Card, DatePicker, Select,
   message, Typography, Tag, Alert, Spin, Progress, Image,
-  Divider, Space, Modal,
+  Divider, Space, Modal, Checkbox,
 } from 'antd'
 import { InboxOutlined, PlusOutlined, DeleteOutlined, BellOutlined, CheckCircleOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
@@ -98,6 +98,7 @@ function ListaArchivos({ archivos }: { archivos: ArchivoSubida[] }) {
 
 function CardExamen({
   card, pacienteId, casoId, puedeEliminar, onChange, onDelete, tipos, tiposMap,
+  replicar, otrosExamenes,
 }: {
   card: ExamenCard
   pacienteId: number
@@ -107,6 +108,8 @@ function CardExamen({
   onDelete: (uid: string) => void
   tipos: TipoExamen[]
   tiposMap: Map<string, '2D' | '3D' | 'AMBOS'>
+  replicar: boolean
+  otrosExamenes: ExamenCard[]
 }) {
   const dim = card.tipo_examen ? dimension(card.tipo_examen, tiposMap) : null
   const esBimax = card.tipo_examen === BIMAXILAR
@@ -116,6 +119,18 @@ function CardExamen({
     try {
       const e = await portalCrearExamen({ paciente_id: pacienteId, tipo_examen: tipo, caso_id: casoId })
       onChange(card.uid, { examen_id: e.id, creando: false })
+      // Si replicar está ON, copia los archivos del primer examen con imágenes ya subidas
+      if (replicar) {
+        const fuente = otrosExamenes.find(c => c.uid !== card.uid && c.examen_id && c.archivos.some(a => a.estado === 'ok'))
+        if (fuente) {
+          for (const a of fuente.archivos.filter(ar => ar.estado === 'ok')) {
+            try {
+              await portalSubirImagen(e.id, a.subtipo, a.file, undefined, a.ubicacion, a.dimFolder)
+            } catch { /* silent */ }
+          }
+          message.success(`Imágenes replicadas a "${tipo}"`)
+        }
+      }
     } catch {
       message.error('Error al crear el examen')
       onChange(card.uid, { tipo_examen: '', creando: false })
@@ -147,6 +162,16 @@ function CardExamen({
           dim === 'AMBOS' ? dimFolder : undefined,
         )
         patch({ estado: 'ok', progreso: 100 })
+        // Replicar al resto de exámenes si está activo
+        if (replicar) {
+          for (const otro of otrosExamenes) {
+            if (otro.uid !== card.uid && otro.examen_id) {
+              try {
+                await portalSubirImagen(otro.examen_id, item.subtipo, item.file, undefined, item.ubicacion, dim === 'AMBOS' ? dimFolder : undefined)
+              } catch { /* silent */ }
+            }
+          }
+        }
       } catch {
         patch({ estado: 'error' })
       }
@@ -301,6 +326,7 @@ export default function PortalNuevoPaciente() {
 
   // Paso 1 — Exámenes
   const [casoId] = useState(() => crypto.randomUUID())
+  const [replicar, setReplicar] = useState(true)
   const [examenes, setExamenes] = useState<ExamenCard[]>([
     { uid: crypto.randomUUID(), tipo_examen: '', examen_id: null, archivos: [], creando: false },
   ])
@@ -468,6 +494,16 @@ export default function PortalNuevoPaciente() {
         {/* ── PASO 1: Exámenes ── */}
         {paso === 1 && pacienteId && (
           <div>
+            {examenes.length > 1 && (
+              <div style={{ marginBottom: 12, padding: '10px 14px', background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe' }}>
+                <Checkbox checked={replicar} onChange={e => setReplicar(e.target.checked)}>
+                  <span style={{ fontWeight: 600, fontSize: 13 }}>Replicar imágenes en todos los exámenes</span>
+                </Checkbox>
+                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2, marginLeft: 24 }}>
+                  Las imágenes subidas a cualquier examen se copian automáticamente a los demás.
+                </div>
+              </div>
+            )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {examenes.map((card) => (
                 <CardExamen
@@ -480,6 +516,8 @@ export default function PortalNuevoPaciente() {
                   onDelete={deleteCard}
                   tipos={tipos}
                   tiposMap={tiposMap}
+                  replicar={replicar}
+                  otrosExamenes={examenes}
                 />
               ))}
             </div>
