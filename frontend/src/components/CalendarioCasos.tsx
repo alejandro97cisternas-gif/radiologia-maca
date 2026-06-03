@@ -112,7 +112,7 @@ export default function CalendarioCasos({ casos, onOpenCaso }: Props) {
 
   const porDia = useMemo(() => {
     const map = new Map<string, Caso[]>()
-    for (const c of casos) {
+    for (const c of casos.filter(c => c.estado !== 'COMPLETADO')) {
       const key = dayjs(c.creado_en).format('YYYY-MM-DD')
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(c)
