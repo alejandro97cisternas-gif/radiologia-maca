@@ -26,9 +26,6 @@ export function useTutorialDashboard(loading: boolean) {
     if (fase !== null && fase !== 'dashboard') return
 
     const timer = setTimeout(() => {
-      // Flag para saber si el usuario completó o escapó
-      let completado = false
-
       const steps = [
         {
           popover: {
@@ -72,7 +69,7 @@ export function useTutorialDashboard(loading: boolean) {
           element: '#board-completado',
           popover: {
             title: '✅ Completados',
-            description: 'Casos con todos los informes subidos. El derivador recibe notificación automática por email al completar cada informe.',
+            description: 'Casos con todos los informes subidos. Una vez subidos todos, usa el botón <b>Enviar informes al derivador</b> para notificarle por email.',
             side: 'left',
           },
         },
@@ -85,15 +82,9 @@ export function useTutorialDashboard(loading: boolean) {
           },
         },
         {
-          element: '#board-pendiente',
           popover: {
             title: '🔢 Versiones',
             description: 'Cada examen muestra su versión (<b>v0, v1…</b>). Si ves <b>v1+</b> en naranja, el derivador actualizó las imágenes de ese examen.',
-            side: 'top',
-            onNextClick: () => {
-              completado = true
-              d.destroy()
-            },
           },
         },
       ]
@@ -107,10 +98,8 @@ export function useTutorialDashboard(loading: boolean) {
         allowClose: false,
         steps: filtrarSteps(steps),
         onDestroyed: () => {
-          if (completado) {
-            tutorial.setFase('derivadores')
-            navigate('/derivadores')
-          }
+          tutorial.setFase('derivadores')
+          navigate('/derivadores')
         },
       })
       d.drive()
@@ -129,8 +118,6 @@ export function useTutorialDerivadores() {
     if (tutorial.getFase() !== 'derivadores') return
 
     const timer = setTimeout(() => {
-      let completado = false
-
       const steps = [
         {
           popover: {
@@ -155,15 +142,9 @@ export function useTutorialDerivadores() {
           },
         },
         {
-          element: '#col-acciones',
           popover: {
             title: '🔗 Portal del derivador',
             description: '1. Generas el link → se envía por email<br>2. El derivador abre el link → accede a su portal<br>3. Sube casos con imágenes y recibe los informes<br>4. Si el link expira, puede pedir uno nuevo ingresando su email.',
-            side: 'left',
-            onNextClick: () => {
-              completado = true
-              d.destroy()
-            },
           },
         },
       ]
@@ -177,10 +158,8 @@ export function useTutorialDerivadores() {
         allowClose: false,
         steps: filtrarSteps(steps),
         onDestroyed: () => {
-          if (completado) {
-            tutorial.setFase('honorarios')
-            navigate('/honorarios')
-          }
+          tutorial.setFase('honorarios')
+          navigate('/honorarios')
         },
       })
       d.drive()
@@ -197,8 +176,6 @@ export function useTutorialHonorarios() {
     if (tutorial.getFase() !== 'honorarios') return
 
     const timer = setTimeout(() => {
-      let completado = false
-
       const steps = [
         {
           popover: {
@@ -239,15 +216,10 @@ export function useTutorialHonorarios() {
           },
         },
         {
-          element: '#honorarios-tabs',
+        {
           popover: {
             title: '🤝 Convenios de descuento',
             description: 'Debajo de las tarifas puedes configurar <b>convenios</b> por categoría:<br>• 1° examen: precio completo<br>• 2° examen del mismo tipo en el caso: precio − descuento 2<br>• 3°+ examen: precio − descuento 3<br><br>El descuento se aplica automáticamente al calcular honorarios.',
-            side: 'top',
-            onNextClick: () => {
-              completado = true
-              d.destroy()
-            },
           },
         },
       ]
@@ -261,7 +233,7 @@ export function useTutorialHonorarios() {
         allowClose: false,
         steps: filtrarSteps(steps),
         onDestroyed: () => {
-          if (completado) tutorial.completar()
+          tutorial.completar()
         },
       })
       d.drive()
