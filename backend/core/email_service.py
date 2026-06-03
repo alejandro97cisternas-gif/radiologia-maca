@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 
 def email_configurado() -> bool:
-    return bool(settings.RESEND_API_KEY)
+    return bool(settings.RESEND_API_KEY) or bool(settings.SMTP_USER and settings.SMTP_PASSWORD)
 
 
 def _html(body: str) -> str:
@@ -77,8 +77,15 @@ def _p(text: str) -> str:
 def _send(to: str, subject: str, html: str,
           attachments: list[tuple[str, bytes, str]] | None = None) -> tuple[bool, str]:
     if not email_configurado():
-        return False, "Resend no configurado (falta RESEND_API_KEY)."
+        return False, "Email no configurado (falta RESEND_API_KEY o SMTP_USER/SMTP_PASSWORD)."
 
+    if settings.RESEND_API_KEY:
+        return _send_resend(to, subject, html, attachments)
+    return _send_smtp(to, subject, html, attachments)
+
+
+def _send_resend(to: str, subject: str, html: str,
+                 attachments: list[tuple[str, bytes, str]] | None = None) -> tuple[bool, str]:
     resend.api_key = settings.RESEND_API_KEY
     params: resend.Emails.SendParams = {
         "from": settings.EMAIL_FROM,
@@ -96,6 +103,40 @@ def _send(to: str, subject: str, html: str,
         return True, f"Enviado a {to}"
     except Exception as e:
         logger.error("Resend error: %s", e)
+        return False, str(e)
+
+
+def _send_smtp(to: str, subject: str, html: str,
+               attachments: list[tuple[str, bytes, str]] | None = None) -> tuple[bool, str]:
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.mime.base import MIMEBase
+    from email import encoders
+
+    msg = MIMEMultipart("mixed")
+    msg["From"] = settings.SMTP_USER
+    msg["To"] = to
+    msg["Subject"] = subject
+    msg.attach(MIMEText(html, "html", "utf-8"))
+
+    if attachments:
+        for _, data, filename in attachments:
+            part = MIMEBase("application", "octet-stream")
+            part.set_payload(data)
+            encoders.encode_base64(part)
+            part.add_header("Content-Disposition", f'attachment; filename="{filename}"')
+            msg.attach(part)
+
+    try:
+        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+            server.sendmail(settings.SMTP_USER, to, msg.as_string())
+        return True, f"Enviado a {to}"
+    except Exception as e:
+        logger.error("SMTP error: %s", e)
         return False, str(e)
 
 

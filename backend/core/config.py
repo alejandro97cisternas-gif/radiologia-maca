@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     RESEND_API_KEY: str = ""
     EMAIL_FROM: str = "Radiología Maca <notificaciones@novex.cloud>"
 
+    # SMTP (Gmail u otro proveedor como alternativa a Resend)
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+
     STORAGE_ROOT: str = "data"
 
     # Storage backend: "local" | "r2"
