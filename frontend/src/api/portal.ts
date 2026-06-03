@@ -25,7 +25,7 @@ export const portalCrearExamen = (body: { paciente_id: number; tipo_examen: stri
 
 // Tipos de examen disponibles (base + custom)
 export const portalGetTipos = () =>
-  portalApi.get('/api/examenes/tipos').then(r => r.data as { nombre: string; dimension: '2D' | '3D' | 'AMBOS'; categoria?: string; custom: boolean }[])
+  portalApi.get('/api/portal/tipos-disponibles').then(r => r.data as { nombre: string; dimension: '2D' | '3D' | 'AMBOS'; categoria?: string; custom: boolean }[])
 
 // Examen detalle (portal)
 export const portalGetExamen = (examenId: number) =>
