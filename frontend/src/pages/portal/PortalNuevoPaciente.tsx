@@ -98,7 +98,7 @@ function ListaArchivos({ archivos }: { archivos: ArchivoSubida[] }) {
 
 function CardExamen({
   card, pacienteId, casoId, puedeEliminar, onChange, onDelete, tipos, tiposMap,
-  replicar, otrosExamenes,
+  replicar, otrosExamenes, esLider,
 }: {
   card: ExamenCard
   pacienteId: number
@@ -110,6 +110,7 @@ function CardExamen({
   tiposMap: Map<string, '2D' | '3D' | 'AMBOS'>
   replicar: boolean
   otrosExamenes: ExamenCard[]
+  esLider: boolean
 }) {
   const dim = card.tipo_examen ? dimension(card.tipo_examen, tiposMap) : null
   const esBimax = card.tipo_examen === BIMAXILAR
@@ -226,8 +227,18 @@ function CardExamen({
         )}
       </div>
 
+      {/* Bloqueado: imágenes se replican desde el primer examen */}
+      {card.examen_id && replicar && !esLider && (
+        <div style={{ padding: '10px 12px', background: '#f0fdf4', borderRadius: 8, border: '1px dashed #86efac' }}>
+          <Typography.Text style={{ fontSize: 12, color: '#16a34a' }}>
+            ↩ Las imágenes se replicarán automáticamente desde el primer examen.
+          </Typography.Text>
+          <ListaArchivos archivos={card.archivos} />
+        </div>
+      )}
+
       {/* 2D puro */}
-      {card.examen_id && dim === '2D' && (
+      {card.examen_id && (!replicar || esLider) && dim === '2D' && (
         <>
           <DropZone accept=".jpg,.jpeg,.png" label="Arrastra imágenes JPG/PNG" onFiles={files => subirArchivos(files, 'imagen')} />
           <ListaArchivos archivos={card.archivos} />
@@ -235,7 +246,7 @@ function CardExamen({
       )}
 
       {/* 3D puro (no bimaxilar) */}
-      {card.examen_id && dim === '3D' && !esBimax && (
+      {card.examen_id && (!replicar || esLider) && dim === '3D' && !esBimax && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div>
             <Typography.Text strong style={{ fontSize: 12, color: '#7c3aed', display: 'block', marginBottom: 6 }}>
@@ -255,7 +266,7 @@ function CardExamen({
       )}
 
       {/* Bimaxilar: superior / inferior + preview */}
-      {card.examen_id && esBimax && (
+      {card.examen_id && (!replicar || esLider) && esBimax && (
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
             {(['superior', 'inferior'] as const).map(ub => (
@@ -277,7 +288,7 @@ function CardExamen({
       )}
 
       {/* AMBOS: 2D imagen | columna 3D con DICOM + Preview */}
-      {card.examen_id && dim === 'AMBOS' && (
+      {card.examen_id && (!replicar || esLider) && dim === 'AMBOS' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div>
             <Typography.Text strong style={{ fontSize: 12, color: '#2563EB', display: 'block', marginBottom: 6 }}>
@@ -505,7 +516,7 @@ export default function PortalNuevoPaciente() {
               </div>
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {examenes.map((card) => (
+              {examenes.map((card, idx) => (
                 <CardExamen
                   key={card.uid}
                   card={card}
@@ -518,6 +529,7 @@ export default function PortalNuevoPaciente() {
                   tiposMap={tiposMap}
                   replicar={replicar}
                   otrosExamenes={examenes}
+                  esLider={idx === 0}
                 />
               ))}
             </div>
