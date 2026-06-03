@@ -12,7 +12,7 @@ const { Sider, Content, Header, Footer } = Layout
 export default function AppLayout({ children, noPadding }: { children: ReactNode; noPadding?: boolean }) {
   const navigate = useNavigate()
   const location = useLocation()
-  const { logout } = useAuth()
+  const { logout, user } = useAuth()
 
   const items = [
     { key: '/', icon: <CalendarOutlined />, label: <span id="menu-dashboard">Dashboard</span> },
@@ -24,7 +24,7 @@ export default function AppLayout({ children, noPadding }: { children: ReactNode
     <Layout style={{ minHeight: '100vh' }}>
       <Sider width={220} style={{ background: '#1e3a5f' }}>
         <div style={{ padding: '20px 16px', color: '#fff', fontWeight: 700, fontSize: 15 }}>
-          Radiología · Maca
+          Gestión de tareas radiológicas{user?.nombre_display ? ` · ${user.nombre_display}` : ''}
         </div>
         <Menu
           theme="dark"

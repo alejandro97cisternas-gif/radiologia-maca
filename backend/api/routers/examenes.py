@@ -1,7 +1,7 @@
 import io
 import uuid
 import zipfile
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -9,17 +9,31 @@ from core.database import get_db
 from core.dependencies import get_current_user
 from core.tenant import get_tenant
 from core.storage import guardar_informe_pdf, get_url, get_bytes
-from core.email_service import enviar_informe_listo_a_derivador
+from core.email_service import enviar_informe_listo_a_derivador, enviar_caso_listo_a_derivador
 from core.config import settings
 from modulos.examenes.models import Examen, TipoExamenCustom
 from modulos.informes.models import Informe
 from modulos.incidencias.models import Incidencia
 from modulos.notificaciones.models import Notificacion
-from modulos.derivadores.models import Derivador
+from modulos.derivadores.models import Derivador, PortalMagicLink
 
 router = APIRouter(prefix="/api/examenes", tags=["examenes"])
 
 ESTADOS_VALIDOS = ["PENDIENTE", "EN_PROCESO", "COMPLETADO"]
+
+
+def _generar_magic_link(derivador_id: int, radiologo_slug: str, db: Session) -> str:
+    db.query(PortalMagicLink).filter(
+        PortalMagicLink.derivador_id == derivador_id, PortalMagicLink.activo == True
+    ).update({"activo": False})
+    token = str(uuid.uuid4())
+    db.add(PortalMagicLink(
+        derivador_id=derivador_id,
+        token=token,
+        expira_en=datetime.utcnow() + timedelta(hours=24),
+    ))
+    db.flush()
+    return f"https://{radiologo_slug}.{settings.BASE_DOMAIN}/portal/acceder?token={token}"
 
 
 @router.get("/tipos")
@@ -140,13 +154,26 @@ async def subir_informe(
     db.refresh(informe)
 
     link_pdf = get_url(path)
-    link_portal = f"https://{radiologo.slug}.{settings.BASE_DOMAIN}/portal/dashboard"
-    ok, _ = enviar_informe_listo_a_derivador(
-        examen.derivador, examen.paciente, examen, link_pdf, link_portal,
-        radiologo_nombre=radiologo.nombre_display or "Radiología",
-    )
-    if ok:
-        examen.notificacion_derivador_enviada = True
+    link_portal = _generar_magic_link(examen.derivador_id, radiologo.slug, db)
+    ok = False
+
+    if examen.caso_id:
+        todos = db.query(Examen).filter(Examen.caso_id == examen.caso_id).all()
+        if all(e.informe is not None for e in todos):
+            ok, _ = enviar_caso_listo_a_derivador(
+                examen.derivador, examen.paciente, todos, link_portal,
+                radiologo_nombre=radiologo.nombre_display or "Radiología",
+            )
+            if ok:
+                for e in todos:
+                    e.notificacion_derivador_enviada = True
+    else:
+        ok, _ = enviar_informe_listo_a_derivador(
+            examen.derivador, examen.paciente, examen, link_pdf, link_portal,
+            radiologo_nombre=radiologo.nombre_display or "Radiología",
+        )
+        if ok:
+            examen.notificacion_derivador_enviada = True
 
     db.add(Notificacion(
         radiologo_id=radiologo.id,

@@ -9,7 +9,7 @@ def email_configurado() -> bool:
     return bool(settings.RESEND_API_KEY) or bool(settings.SMTP_USER and settings.SMTP_PASSWORD)
 
 
-def _html(body: str) -> str:
+def _html(body: str, titulo: str = "Radiología") -> str:
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="UTF-8"></head>
@@ -17,17 +17,17 @@ def _html(body: str) -> str:
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#F0F4F8;">
   <tr><td align="center" style="padding:36px 16px;">
     <table width="560" cellpadding="0" cellspacing="0"
-           style="background:#FFFFFF;border:2px solid #2563EB;max-width:560px;width:100%;">
+           style="background:#FFFFFF;border:2px solid #1e3a5f;max-width:560px;width:100%;">
       <tr>
-        <td style="background:#2563EB;padding:20px 28px;">
+        <td style="background:#1e3a5f;padding:20px 28px;">
           <span style="font-size:20px;font-weight:900;color:#FFFFFF;font-family:Arial,sans-serif;">
-            Radiología · Dra. Habash
+            {titulo}
           </span>
         </td>
       </tr>
       <tr><td style="padding:32px 28px 24px;">{body}</td></tr>
       <tr>
-        <td style="background:#F8FAFC;border-top:2px solid #2563EB;padding:16px 28px;">
+        <td style="background:#F8FAFC;border-top:2px solid #1e3a5f;padding:16px 28px;">
           <p style="margin:0;font-size:10px;color:#94A3B8;">
             Correo generado automáticamente · No responder este mensaje
           </p>
@@ -41,7 +41,7 @@ def _html(body: str) -> str:
 
 def _btn(label: str, url: str) -> str:
     return f"""<table cellpadding="0" cellspacing="0" style="margin-top:20px;">
-  <tr><td style="background:#2563EB;padding:0;">
+  <tr><td style="background:#1e3a5f;padding:0;">
     <a href="{url}" style="display:inline-block;padding:12px 28px;color:#FFF;
        font-size:14px;font-weight:700;text-decoration:none;font-family:Arial,sans-serif;">
       {label} →
@@ -171,7 +171,8 @@ def enviar_magic_link_portal(derivador, link: str, radiologo_nombre: str = "Radi
         + _btn("Ingresar al portal", link)
         + _p(f"<span style='font-size:11px;color:#94A3B8;'>Enlace: {link}</span>")
     )
-    return _send(derivador.email, f"Acceso a su Portal · {radiologo_nombre}", _html(body), from_name=radiologo_nombre or None)
+    titulo = f"Radiología · {radiologo_nombre}" if radiologo_nombre else "Radiología"
+    return _send(derivador.email, f"Acceso a su Portal · {radiologo_nombre}", _html(body, titulo), from_name=radiologo_nombre or None)
 
 
 def enviar_tarea_pendiente_a_doctora(derivador, paciente, examen, radiologo_email: str = "") -> tuple[bool, str]:
@@ -212,10 +213,11 @@ def enviar_informe_listo_a_derivador(
         + _btn("Descargar informe PDF", link_pdf)
         + _btn("Ver en el portal", link_portal)
     )
+    titulo = f"Radiología · {radiologo_nombre}" if radiologo_nombre else "Radiología"
     return _send(
         derivador.email,
         f"Informe listo · {paciente.nombre_completo} · {examen.tipo_examen} · {radiologo_nombre}",
-        _html(body),
+        _html(body, titulo),
         from_name=radiologo_nombre or None,
     )
 
@@ -228,12 +230,35 @@ def enviar_honorarios(derivador, periodo: str, pdf_bytes: bytes, radiologo_nombr
         + _p(f"Dr./Dra. <strong>{derivador.nombre}</strong>, adjuntamos el resumen de honorarios "
              f"correspondiente al período <strong>{periodo}</strong>.")
     )
+    titulo = f"Radiología · {radiologo_nombre}" if radiologo_nombre else "Radiología"
     nombre_archivo = f"honorarios_{derivador.id}_{periodo}.pdf"
     return _send(
         derivador.email,
         f"Honorarios {periodo}",
-        _html(body),
+        _html(body, titulo),
         attachments=[("application/pdf", pdf_bytes, nombre_archivo)],
+        from_name=radiologo_nombre or None,
+    )
+
+
+def enviar_caso_listo_a_derivador(
+    derivador, paciente, examenes: list, link_portal: str, radiologo_nombre: str = "Radiología"
+) -> tuple[bool, str]:
+    if not derivador.email:
+        return False, "Derivador sin email."
+    filas = [_row("Examen", e.tipo_examen) for e in examenes]
+    body = (
+        _h("Informes listos")
+        + _p(f"Dr./Dra. <strong>{derivador.nombre}</strong>, los informes de su paciente "
+             f"<strong>{paciente.nombre_completo}</strong> están disponibles.")
+        + _table(*filas)
+        + _btn("Ver en el portal", link_portal)
+    )
+    titulo = f"Radiología · {radiologo_nombre}" if radiologo_nombre else "Radiología"
+    return _send(
+        derivador.email,
+        f"Informes listos · {paciente.nombre_completo} · {radiologo_nombre}",
+        _html(body, titulo),
         from_name=radiologo_nombre or None,
     )
 
@@ -253,9 +278,10 @@ def enviar_incidencia_a_derivador(derivador, paciente, examen, comentario: str, 
         + _p(f"<strong>Comentario:</strong><br>{comentario}")
         + _p("Por favor ingresa a tu portal para revisar y responder esta incidencia.")
     )
+    titulo = f"Radiología · {radiologo_nombre}" if radiologo_nombre else "Radiología"
     return _send(
         derivador.email,
         f"Incidencia · {paciente.nombre_completo} · {examen.tipo_examen}",
-        _html(body),
+        _html(body, titulo),
         from_name=radiologo_nombre or None,
     )

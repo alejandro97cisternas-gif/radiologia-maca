@@ -3,7 +3,7 @@ import { getMe } from '../api/auth'
 
 interface AuthState {
   token: string | null
-  user: { id: number; username: string } | null
+  user: { id: number; username: string; nombre_display?: string } | null
   isLoading: boolean
   setToken: (t: string | null) => void
   logout: () => void

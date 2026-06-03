@@ -25,7 +25,7 @@ export default function Login() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f4f8' }}>
       <Card style={{ width: 360, boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
-        <Typography.Title level={3} style={{ marginBottom: 4, color: '#1e3a5f' }}>Radiología · Maca</Typography.Title>
+        <Typography.Title level={3} style={{ marginBottom: 4, color: '#1e3a5f' }}>Gestión de tareas radiológicas</Typography.Title>
         <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>Ingresa tus credenciales</Typography.Text>
         <Form layout="vertical" onFinish={onFinish}>
           <Form.Item name="username" label="Usuario" rules={[{ required: true }]}>
