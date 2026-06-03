@@ -167,7 +167,7 @@ def enviar_magic_link_portal(derivador, link: str, radiologo_nombre: str = "Radi
     body = (
         _h(f"Bienvenido/a al portal — {derivador.nombre}")
         + _p(
-            f"Estimado/a Dr./Dra. <strong>{derivador.nombre}</strong>, a partir de ahora "
+            f"Estimado/a <strong>{derivador.nombre}</strong>, a partir de ahora "
             f"<strong>{radiologo_nombre}</strong> utiliza esta plataforma para la gestión "
             f"de solicitudes e informes radiológicos."
         )
@@ -216,7 +216,7 @@ def enviar_informe_listo_a_derivador(
         return False, "Derivador sin email."
     body = (
         _h("Informe listo")
-        + _p(f"Dr./Dra. <strong>{derivador.nombre}</strong>, el informe de su paciente "
+        + _p(f"centro <strong>{derivador.nombre}</strong>, el informe de su paciente "
              f"<strong>{paciente.nombre_completo}</strong> está disponible.")
         + _table(
             _row("Paciente", paciente.nombre_completo),
@@ -240,7 +240,7 @@ def enviar_honorarios(derivador, periodo: str, pdf_bytes: bytes, radiologo_nombr
         return False, "Derivador sin email."
     body = (
         _h(f"Honorarios {periodo}")
-        + _p(f"Dr./Dra. <strong>{derivador.nombre}</strong>, adjuntamos el resumen de honorarios "
+        + _p(f"centro <strong>{derivador.nombre}</strong>, adjuntamos el resumen de honorarios "
              f"correspondiente al período <strong>{periodo}</strong>.")
     )
     titulo = f"Radiología · {radiologo_nombre}" if radiologo_nombre else "Radiología"
@@ -279,7 +279,7 @@ def enviar_caso_listo_a_derivador(
     )
     body = (
         _h("Informes listos")
-        + _p(f"Dr./Dra. <strong>{derivador.nombre}</strong>, los informes de su paciente "
+        + _p(f"centro <strong>{derivador.nombre}</strong>, los informes de su paciente "
              f"<strong>{paciente.nombre_completo}</strong> están disponibles.")
         + tabla
         + _btn("Ver en el portal", link_portal)
@@ -298,7 +298,7 @@ def enviar_incidencia_a_derivador(derivador, paciente, examen, comentario: str, 
         return False, "Derivador sin email."
     body = (
         _h("Incidencia en un examen")
-        + _p(f"Dr./Dra. <strong>{derivador.nombre}</strong>, se ha registrado "
+        + _p(f"centro <strong>{derivador.nombre}</strong>, se ha registrado "
              f"una incidencia en el siguiente examen.")
         + _table(
             _row("Paciente", paciente.nombre_completo),
