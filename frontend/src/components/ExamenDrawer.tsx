@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import {
   Drawer, Descriptions, Tag, Image, Upload, Button, message,
-  Modal, Spin, Empty, Tabs, Badge, Typography, Divider,
+  Spin, Empty, Tabs, Badge, Typography, Divider,
 } from 'antd'
 import { UploadOutlined, DownloadOutlined, FilePdfOutlined, CheckCircleOutlined } from '@ant-design/icons'
 import type { Caso, ImagenExamen } from '../api/examenes'
-import { getCasoDetalle, subirInforme, patchEstadoCaso, descargarCaso } from '../api/examenes'
+import { getCasoDetalle, subirInforme, patchEstadoCaso, descargarCaso, notificarDerivador } from '../api/examenes'
 import IncidenciaSection from './IncidenciaSection'
 
 type ExamenConImagenes = {
@@ -13,6 +13,7 @@ type ExamenConImagenes = {
   tipo_examen: string
   estado: string
   tiene_informe: boolean
+  notificacion_derivador_enviada: boolean
   version: number
   imagenes: ImagenExamen[]
 }
@@ -32,6 +33,7 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState<number | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [enviando, setEnviando] = useState(false)
   const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
   const resolveUrl = (url: string) => url.startsWith('http') ? url : `${BASE}${url}`
 
@@ -72,17 +74,7 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
       if (caso) {
         const data = await getCasoDetalle(caso.caso_id)
         setExamenes(data.examenes as ExamenConImagenes[])
-        const todosCompletos = (data.examenes as ExamenConImagenes[]).every(e => e.tiene_informe)
-        if (todosCompletos) {
-          onClose()
-          Modal.success({
-            title: 'Todos los informes subidos',
-            content: 'El caso ha pasado a COMPLETADO y se ha notificado al derivador.',
-            okText: 'Entendido',
-          })
-        } else {
           message.success('Informe subido correctamente')
-        }
       }
     } catch {
       message.error('Error al subir el informe')
@@ -93,6 +85,23 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
   }
 
   const todosConInforme = examenes.length > 0 && examenes.every(e => e.tiene_informe)
+  const yaNotificado = examenes.some(e => e.notificacion_derivador_enviada)
+
+  const handleEnviarDerivador = async () => {
+    if (!caso) return
+    setEnviando(true)
+    try {
+      await notificarDerivador(caso.caso_id)
+      message.success('Informes enviados al derivador')
+      const data = await getCasoDetalle(caso.caso_id)
+      setExamenes(data.examenes as ExamenConImagenes[])
+      onUpdate()
+    } catch {
+      message.error('Error al enviar al derivador')
+    } finally {
+      setEnviando(false)
+    }
+  }
 
   return (
     <Drawer
@@ -117,11 +126,24 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
         ) : null
       }
       footer={
-        todosConInforme ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#16a34a', padding: '8px 0' }}>
-            <CheckCircleOutlined style={{ fontSize: 18 }} />
-            <Typography.Text style={{ color: '#16a34a', fontWeight: 600 }}>Todos los informes subidos</Typography.Text>
-          </div>
+        examenes.length > 0 ? (
+          yaNotificado ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#16a34a', padding: '8px 0' }}>
+              <CheckCircleOutlined style={{ fontSize: 18 }} />
+              <Typography.Text style={{ color: '#16a34a', fontWeight: 600 }}>Enviado al derivador</Typography.Text>
+            </div>
+          ) : (
+            <Button
+              type="primary"
+              block
+              disabled={!todosConInforme}
+              loading={enviando}
+              onClick={handleEnviarDerivador}
+              style={{ background: todosConInforme ? '#1e3a5f' : undefined }}
+            >
+              {todosConInforme ? 'Enviar informes al derivador' : 'Sube todos los informes para enviar'}
+            </Button>
+          )
         ) : null
       }
     >

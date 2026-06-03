@@ -68,6 +68,7 @@ def _serializar(e: Examen, inc_estado: str | None = None) -> dict:
         "incidencia_estado": inc_estado,
         "version": e.version or 0,
         "derivador_color": e.derivador.color or "#6b7280",
+        "notificacion_derivador_enviada": e.notificacion_derivador_enviada,
     }
 
 
@@ -154,26 +155,6 @@ async def subir_informe(
     db.refresh(informe)
 
     link_pdf = get_url(path)
-    link_portal = _generar_magic_link(examen.derivador_id, radiologo.slug, db)
-    ok = False
-
-    if examen.caso_id:
-        todos = db.query(Examen).filter(Examen.caso_id == examen.caso_id).all()
-        if all(e.informe is not None for e in todos):
-            ok, _ = enviar_caso_listo_a_derivador(
-                examen.derivador, examen.paciente, todos, link_portal,
-                radiologo_nombre=radiologo.nombre_display or "Radiología",
-            )
-            if ok:
-                for e in todos:
-                    e.notificacion_derivador_enviada = True
-    else:
-        ok, _ = enviar_informe_listo_a_derivador(
-            examen.derivador, examen.paciente, examen, link_pdf, link_portal,
-            radiologo_nombre=radiologo.nombre_display or "Radiología",
-        )
-        if ok:
-            examen.notificacion_derivador_enviada = True
 
     db.add(Notificacion(
         radiologo_id=radiologo.id,
@@ -183,7 +164,7 @@ async def subir_informe(
     ))
     db.commit()
 
-    return {"informe_id": informe.id, "token_publico": informe.token_publico, "link_pdf": link_pdf, "notificacion_enviada": ok}
+    return {"informe_id": informe.id, "token_publico": informe.token_publico, "link_pdf": link_pdf}
 
 
 @router.get("/{examen_id}/descargar-imagenes")
@@ -239,6 +220,27 @@ def detalle_caso(caso_id: str, request: Request, db: Session = Depends(get_db), 
             for e in examenes
         ]
     }
+
+
+@router.post("/caso/{caso_id}/notificar-derivador")
+def notificar_derivador(caso_id: str, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    radiologo = get_tenant(request)
+    examenes = _examenes_por_caso(caso_id, radiologo.id, db)
+    if not examenes:
+        raise HTTPException(404, "Caso no encontrado")
+    if not all(e.informe is not None for e in examenes):
+        raise HTTPException(400, "Faltan informes por subir")
+
+    link_portal = _generar_magic_link(examenes[0].derivador_id, radiologo.slug, db)
+    ok, msg = enviar_caso_listo_a_derivador(
+        examenes[0].derivador, examenes[0].paciente, examenes, link_portal,
+        radiologo_nombre=radiologo.nombre_display or "Radiología",
+    )
+    if ok:
+        for e in examenes:
+            e.notificacion_derivador_enviada = True
+        db.commit()
+    return {"enviado": ok, "mensaje": msg}
 
 
 @router.patch("/caso/{caso_id}/estado")

@@ -136,6 +136,9 @@ export const descargarCaso = async (caso: Caso): Promise<void> => {
   URL.revokeObjectURL(url)
 }
 
+export const notificarDerivador = (casoId: string) =>
+  api.post(`/api/examenes/caso/${encodeURIComponent(casoId)}/notificar-derivador`).then(r => r.data)
+
 export const subirInforme = (examenId: number, file: File) => {
   const form = new FormData()
   form.append('archivo', file)
