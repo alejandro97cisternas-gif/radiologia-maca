@@ -21,7 +21,7 @@ def _html(body: str) -> str:
       <tr>
         <td style="background:#2563EB;padding:20px 28px;">
           <span style="font-size:20px;font-weight:900;color:#FFFFFF;font-family:Arial,sans-serif;">
-            Radiología · Dra. Macarena
+            Radiología · Dra. Habash
           </span>
         </td>
       </tr>

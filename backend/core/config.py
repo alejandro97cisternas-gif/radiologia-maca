@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     BASE_DOMAIN: str = "localhost"  # tudominio.com en producción
 
     RESEND_API_KEY: str = ""
-    EMAIL_FROM: str = "Radiología Maca <notificaciones@novex.cloud>"
+    EMAIL_FROM: str = "Dra. Habash <notificaciones@novex.cloud>"
 
     # SMTP (Gmail u otro proveedor como alternativa a Resend)
     SMTP_HOST: str = "smtp.gmail.com"
