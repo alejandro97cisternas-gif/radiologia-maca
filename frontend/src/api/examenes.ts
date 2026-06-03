@@ -38,8 +38,15 @@ export interface Caso {
 }
 
 export function agruparEnCasos(examenes: Examen[]): Caso[] {
+  // Deduplicate by exam ID in case backend returns duplicates
+  const seenIds = new Set<number>()
+  const unique = examenes.filter(e => {
+    if (seenIds.has(e.id)) return false
+    seenIds.add(e.id)
+    return true
+  })
   const map = new Map<string, Examen[]>()
-  for (const e of examenes) {
+  for (const e of unique) {
     const key = e.caso_id || `solo_${e.id}`
     if (!map.has(key)) map.set(key, [])
     map.get(key)!.push(e)

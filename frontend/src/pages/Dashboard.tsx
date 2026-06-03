@@ -55,13 +55,6 @@ export default function Dashboard() {
     cargar()
   }
 
-  const cellRender = (date: Dayjs) => {
-    const key = date.format('YYYY-MM-DD')
-    const items = calendario[key] || []
-    if (!items.length) return null
-    return <Badge count={items.length} size="small" color="#2563EB" />
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', flex: 1, width: '100%' }}>
       <div style={{

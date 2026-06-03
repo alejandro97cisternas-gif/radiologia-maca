@@ -40,7 +40,13 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
     setLoading(true)
     getCasoDetalle(caso.caso_id)
       .then(async data => {
-        setExamenes(data.examenes as ExamenConImagenes[])
+        const seenIds = new Set<number>()
+        const unique = (data.examenes as ExamenConImagenes[]).filter(e => {
+          if (seenIds.has(e.id)) return false
+          seenIds.add(e.id)
+          return true
+        })
+        setExamenes(unique)
         if (caso.estado === 'PENDIENTE') {
           await patchEstadoCaso(caso.caso_id, 'EN_PROCESO')
           onUpdate()

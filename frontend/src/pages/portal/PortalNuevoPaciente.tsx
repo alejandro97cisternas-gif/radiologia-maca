@@ -114,6 +114,9 @@ function CardExamen({
 }) {
   const dim = card.tipo_examen ? dimension(card.tipo_examen, tiposMap) : null
   const esBimax = card.tipo_examen === BIMAXILAR
+  const tiposUsados = new Set(
+    otrosExamenes.filter(c => c.uid !== card.uid && c.tipo_examen).map(c => c.tipo_examen)
+  )
 
   const seleccionarTipo = async (tipo: string) => {
     onChange(card.uid, { tipo_examen: tipo, creando: true })
@@ -208,7 +211,7 @@ function CardExamen({
               label: cat,
               options: tipos
                 .filter(t => t.categoria === cat)
-                .map(t => ({ value: t.nombre, label: t.nombre })),
+                .map(t => ({ value: t.nombre, label: t.nombre, disabled: tiposUsados.has(t.nombre) })),
             }))
           })()}
         />
