@@ -3,6 +3,10 @@ import { Calendar, Tag, Typography, Button, Tooltip, message, Badge, Segmented }
 import { LeftOutlined, RightOutlined, PictureOutlined, DownloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
+
+const CL = 'America/Santiago'
+const clDay = (iso: string) => dayjs.utc(iso).tz(CL).format('YYYY-MM-DD')
+const clTime = (iso: string) => dayjs.utc(iso).tz(CL)
 import type { Caso } from '../api/examenes'
 import { descargarCaso } from '../api/examenes'
 
@@ -10,7 +14,7 @@ type SubVista = 'mes' | 'semana'
 
 // ── Chip compacto para vista mes ──────────────────────────────────────────────
 
-function CasoChip({ caso, onClick }: { caso: Caso; onClick: () => void }) {
+function CasoChip({ caso, orden, onClick }: { caso: Caso; orden: number; onClick: () => void }) {
   return (
     <div
       onClick={e => { e.stopPropagation(); onClick() }}
@@ -28,8 +32,11 @@ function CasoChip({ caso, onClick }: { caso: Caso; onClick: () => void }) {
         boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
       }}
     >
+      <span style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', flexShrink: 0, minWidth: 14 }}>
+        {String(orden).padStart(2, '0')}
+      </span>
       <Badge
-        status={caso.estado === 'COMPLETADO' ? 'success' : caso.estado === 'EN_PROCESO' ? 'processing' : 'warning'}
+        status={caso.estado === 'EN_PROCESO' ? 'processing' : 'warning'}
         style={{ flexShrink: 0 }}
       />
       <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11, color: '#1e3a5f', fontWeight: 600 }}>
@@ -41,7 +48,7 @@ function CasoChip({ caso, onClick }: { caso: Caso; onClick: () => void }) {
 
 // ── Card para vista semana ────────────────────────────────────────────────────
 
-function CasoCardSemana({ caso, onClick }: { caso: Caso; onClick: () => void }) {
+function CasoCardSemana({ caso, orden, onClick }: { caso: Caso; orden: number; onClick: () => void }) {
   return (
     <div
       style={{
@@ -56,9 +63,17 @@ function CasoCardSemana({ caso, onClick }: { caso: Caso; onClick: () => void }) 
       }}
       onClick={onClick}
     >
-      <Typography.Text strong style={{ fontSize: 12, color: '#1e3a5f', display: 'block', marginBottom: 3 }}>
-        {caso.paciente}
-      </Typography.Text>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+        <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', background: '#6b7280', borderRadius: 3, padding: '0 4px', lineHeight: '16px', flexShrink: 0 }}>
+          #{String(orden).padStart(2, '0')}
+        </span>
+        <Typography.Text strong style={{ fontSize: 12, color: '#1e3a5f', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {caso.paciente}
+        </Typography.Text>
+        <Typography.Text style={{ fontSize: 10, color: '#9ca3af', flexShrink: 0 }}>
+          {clTime(caso.creado_en).format('HH:mm')}
+        </Typography.Text>
+      </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, marginBottom: 5 }}>
         {caso.examenes.map(e => (
           <Tag key={e.id} color="blue" style={{ margin: 0, fontSize: 10 }}>{e.tipo_examen}</Tag>
@@ -110,13 +125,17 @@ export default function CalendarioCasos({ casos, onOpenCaso }: Props) {
     return hoy.subtract(dow === 0 ? 6 : dow - 1, 'day').startOf('day')
   })
 
+  // Agrupa por día Chile, ordena por hora de llegada (más antiguo primero)
   const porDia = useMemo(() => {
     const map = new Map<string, Caso[]>()
     for (const c of casos.filter(c => c.estado !== 'COMPLETADO')) {
-      const key = dayjs(c.creado_en).format('YYYY-MM-DD')
+      const key = clDay(c.creado_en)
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(c)
     }
+    // Ordenar cada día: más antiguo primero (prioridad de atención)
+    for (const [key, list] of map)
+      map.set(key, list.sort((a, b) => new Date(a.creado_en).getTime() - new Date(b.creado_en).getTime()))
     return map
   }, [casos])
 
@@ -124,14 +143,14 @@ export default function CalendarioCasos({ casos, onOpenCaso }: Props) {
 
   const cellRender = (current: Dayjs, info: any) => {
     if (info?.type && info.type !== 'date') return info.originNode
-    const key = current.format('YYYY-MM-DD')
+    const key = current.tz ? current.tz(CL).format('YYYY-MM-DD') : current.format('YYYY-MM-DD')
     const dayCasos = porDia.get(key) ?? []
     if (!dayCasos.length) return null
     const MAX = 3
     return (
       <div style={{ padding: '2px 4px' }}>
-        {dayCasos.slice(0, MAX).map(c => (
-          <CasoChip key={c.caso_id} caso={c} onClick={() => onOpenCaso(c)} />
+        {dayCasos.slice(0, MAX).map((c, i) => (
+          <CasoChip key={c.caso_id} caso={c} orden={i + 1} onClick={() => onOpenCaso(c)} />
         ))}
         {dayCasos.length > MAX && (
           <Typography.Text style={{ fontSize: 10, color: '#6b7280', paddingLeft: 4 }}>
@@ -184,7 +203,7 @@ export default function CalendarioCasos({ casos, onOpenCaso }: Props) {
       {subVista === 'semana' && (
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
           {diasSemana.map((dia, idx) => {
-            const key = dia.format('YYYY-MM-DD')
+            const key = dia.tz ? dia.tz(CL).format('YYYY-MM-DD') : dia.format('YYYY-MM-DD')
             const dayCasos = porDia.get(key) ?? []
             const esHoy = dia.isSame(dayjs(), 'day')
             return (
@@ -211,8 +230,8 @@ export default function CalendarioCasos({ casos, onOpenCaso }: Props) {
 
                 {/* Cards del día */}
                 <div style={{ minHeight: 60 }}>
-                  {dayCasos.map(c => (
-                    <CasoCardSemana key={c.caso_id} caso={c} onClick={() => onOpenCaso(c)} />
+                  {dayCasos.map((c, i) => (
+                    <CasoCardSemana key={c.caso_id} caso={c} orden={i + 1} onClick={() => onOpenCaso(c)} />
                   ))}
                 </div>
               </div>
