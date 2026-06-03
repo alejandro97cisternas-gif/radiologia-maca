@@ -174,15 +174,16 @@ class ExamenCreate(BaseModel):
 
 @router.get("/tipos-disponibles")
 def tipos_disponibles(derivador: Derivador = Depends(get_portal_derivador), db: Session = Depends(get_db)):
+    from sqlalchemy import func
     tarifas_nombres = {
-        t.tipo_examen for t in
+        t.tipo_examen.upper() for t in
         db.query(TarifaDerivador).filter(TarifaDerivador.derivador_id == derivador.id, TarifaDerivador.activa == True).all()
     }
     if not tarifas_nombres:
         return []
     tipos = (db.query(TipoExamenCustom)
              .filter(TipoExamenCustom.radiologo_id == derivador.radiologo_id,
-                     TipoExamenCustom.nombre.in_(tarifas_nombres),
+                     func.upper(TipoExamenCustom.nombre).in_(tarifas_nombres),
                      TipoExamenCustom.activo == True)
              .order_by(TipoExamenCustom.categoria, TipoExamenCustom.nombre).all())
     return [{"nombre": t.nombre, "dimension": t.dimension, "categoria": t.categoria, "custom": True} for t in tipos]
