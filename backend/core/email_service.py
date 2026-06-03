@@ -165,14 +165,27 @@ def enviar_magic_link_portal(derivador, link: str, radiologo_nombre: str = "Radi
     if not derivador.email:
         return False, "Derivador sin email."
     body = (
-        _h("Acceso a su Portal")
-        + _p(f"Dr./Dra. <strong>{derivador.nombre}</strong>, use el enlace de abajo "
-             "para ingresar a su portal. Válido por <strong>24 horas</strong>.")
+        _h(f"Bienvenido/a al portal — {derivador.nombre}")
+        + _p(
+            f"Estimado/a Dr./Dra. <strong>{derivador.nombre}</strong>, a partir de ahora "
+            f"<strong>{radiologo_nombre}</strong> utiliza esta plataforma para la gestión "
+            f"de solicitudes e informes radiológicos."
+        )
+        + _p(
+            "A través de su portal podrá <strong>enviar imágenes y solicitudes de exámenes</strong>, "
+            "hacer seguimiento del estado de sus casos y acceder a los informes finalizados "
+            "en cuanto estén disponibles."
+        )
+        + _p(
+            "La primera vez que ingrese, un <strong>tutorial paso a paso</strong> lo guiará "
+            "por las funciones principales de la plataforma."
+        )
+        + _p("El enlace de acceso es válido por <strong>24 horas</strong>.")
         + _btn("Ingresar al portal", link)
-        + _p(f"<span style='font-size:11px;color:#94A3B8;'>Enlace: {link}</span>")
+        + _p(f"<span style='font-size:11px;color:#94A3B8;'>Si el botón no funciona, copie este enlace en su navegador: {link}</span>")
     )
     titulo = f"Radiología · {radiologo_nombre}" if radiologo_nombre else "Radiología"
-    return _send(derivador.email, f"Acceso a su Portal · {radiologo_nombre}", _html(body, titulo), from_name=radiologo_nombre or None)
+    return _send(derivador.email, f"Acceso a su portal · {derivador.nombre} · {radiologo_nombre}", _html(body, titulo), from_name=radiologo_nombre or None)
 
 
 def enviar_tarea_pendiente_a_doctora(derivador, paciente, examen, radiologo_email: str = "") -> tuple[bool, str]:
