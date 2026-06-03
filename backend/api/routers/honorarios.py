@@ -38,7 +38,13 @@ def _calcular_detalle(derivador_id: int, periodo: str, db: Session, radiologo_id
             Convenio.activo == True,
         ).all()
     }
-    cat_map = {t.nombre.upper(): t.categoria for t in db.query(TipoExamenCustom).filter(TipoExamenCustom.radiologo_id == radiologo_id).all()}
+    _raw_tipos = db.query(TipoExamenCustom).filter(TipoExamenCustom.radiologo_id == radiologo_id).all()
+    cat_map: dict[str, str | None] = {}
+    for t in _raw_tipos:
+        key = t.nombre.upper()
+        # prefer the entry that has a categoria (seed record) over duplicates without it
+        if key not in cat_map or (t.categoria is not None and cat_map[key] is None):
+            cat_map[key] = t.categoria
 
     casos: dict[str, list] = {}
     for e in examenes:
@@ -210,7 +216,11 @@ def crear_tarifa_item(derivador_id: int, body: TarifaItemCreate, request: Reques
     _derivador_del_tenant(derivador_id, radiologo.id, db)
     nombre = body.tipo_examen.strip().upper()
     if nombre not in _TIPOS_BASE:
-        custom = db.query(TipoExamenCustom).filter(TipoExamenCustom.radiologo_id == radiologo.id, TipoExamenCustom.nombre == nombre).first()
+        from sqlalchemy import func as sqlfunc
+        custom = db.query(TipoExamenCustom).filter(
+            TipoExamenCustom.radiologo_id == radiologo.id,
+            sqlfunc.upper(TipoExamenCustom.nombre) == nombre,
+        ).first()
         if custom:
             if not custom.activo:
                 custom.activo = True
