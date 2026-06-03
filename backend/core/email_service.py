@@ -165,9 +165,9 @@ def enviar_magic_link_portal(derivador, link: str, radiologo_nombre: str = "Radi
     if not derivador.email:
         return False, "Derivador sin email."
     body = (
-        _h(f"Bienvenido/a al portal — {derivador.nombre}")
+        _h(f"Bienvenido/a al portal Derivador ({derivador.nombre})")
         + _p(
-            f"Estimado/a <strong>{derivador.nombre}</strong>, a partir de ahora "
+            f"Estimado/a Centro <strong>{derivador.nombre}</strong>, a partir de ahora "
             f"<strong>{radiologo_nombre}</strong> utiliza esta plataforma para la gestión "
             f"de solicitudes e informes radiológicos."
         )
