@@ -1,5 +1,5 @@
 from datetime import datetime, timezone, date as DateType
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
@@ -18,6 +18,13 @@ from modulos.examenes.models import Examen, ImagenExamen, RevisionExamen, TipoEx
 from modulos.tarifas.models import TarifaDerivador
 
 router = APIRouter(prefix="/api/portal", tags=["portal"])
+
+
+@router.get("/tenant-info")
+def tenant_info(request: Request):
+    from core.tenant import get_tenant
+    radiologo = get_tenant(request)
+    return {"nombre_display": radiologo.nombre_display or "Radiología"}
 
 
 class SolicitarAccesoBody(BaseModel):

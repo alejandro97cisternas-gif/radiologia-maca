@@ -2,13 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Spin, Result, Button, Form, Input, Card, Typography, message } from 'antd'
 import { MailOutlined } from '@ant-design/icons'
-import { portalAcceder, portalSolicitarAcceso } from '../../api/portal'
+import { portalAcceder, portalSolicitarAcceso, portalTenantInfo } from '../../api/portal'
 
 const { Title, Text } = Typography
 
 function FormSolicitarAcceso() {
   const [loading, setLoading] = useState(false)
   const [enviado, setEnviado] = useState(false)
+  const [tenantNombre, setTenantNombre] = useState('Radiología')
+
+  useEffect(() => {
+    portalTenantInfo().then(d => setTenantNombre(`Radiología · ${d.nombre_display}`)).catch(() => {})
+  }, [])
 
   const onFinish = async ({ email }: { email: string }) => {
     setLoading(true)
@@ -32,9 +37,9 @@ function FormSolicitarAcceso() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F0F4F8' }}>
-      <Card style={{ width: 400, border: '2px solid #2563EB' }}>
-        <div style={{ background: '#2563EB', margin: '-24px -24px 24px', padding: '20px 24px' }}>
-          <Title level={4} style={{ color: '#fff', margin: 0 }}>Radiología · Dra. Macarena</Title>
+      <Card style={{ width: 400, border: '2px solid #1e3a5f' }}>
+        <div style={{ background: '#1e3a5f', margin: '-24px -24px 24px', padding: '20px 24px' }}>
+          <Title level={4} style={{ color: '#fff', margin: 0 }}>{tenantNombre}</Title>
         </div>
         <Title level={5} style={{ marginBottom: 8 }}>Acceso al portal</Title>
         <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
