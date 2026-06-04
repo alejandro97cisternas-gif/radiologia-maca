@@ -269,7 +269,7 @@ function TarifasEditor({ derivadorId, moneda }: { derivadorId: number; moneda: s
               step={moneda === 'CAD' ? 10 : 1000}
               style={{ width: '100%' }}
               formatter={v => moneda === 'CAD' ? `CA$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : `$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
-              parser={v => Number(v?.replace(/CA\$\s?|(\,)*|\$\s?|(\.)*/g, '') || 0)}
+              parser={v => Number((moneda === 'CAD' ? v?.replace(/CA\$|,/g, '') : v?.replace(/[$\.]/g, '')) || 0)}
               placeholder={moneda === 'CAD' ? 'CA$0' : '$0'}
             />
           </Form.Item>
@@ -299,7 +299,7 @@ function TarifasEditor({ derivadorId, moneda }: { derivadorId: number; moneda: s
             <InputNumber
               min={0} step={moneda === 'CAD' ? 10 : 1000} style={{ width: '100%' }}
               formatter={v => moneda === 'CAD' ? `CA$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : `$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
-              parser={v => Number(v?.replace(/CA\$\s?|(\,)*|\$\s?|(\.)*/g, '') || 0)}
+              parser={v => Number((moneda === 'CAD' ? v?.replace(/CA\$|,/g, '') : v?.replace(/[$\.]/g, '')) || 0)}
               placeholder={moneda === 'CAD' ? 'CA$0' : '$0'}
             />
           </Form.Item>
@@ -390,12 +390,12 @@ function ConveniosEditor({ derivadorId, moneda }: { derivadorId: number; moneda:
           <Form.Item name="descuento_2" label={`Descuento en el 2° examen (${moneda})`} initialValue={0} rules={[{ required: true }]}>
             <InputNumber min={0} step={moneda === 'CAD' ? 10 : 1000} style={{ width: '100%' }}
               formatter={v => moneda === 'CAD' ? `CA$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : `$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
-              parser={v => Number(v?.replace(/CA\$\s?|(\,)*|\$\s?|(\.)*/g, '') || 0)} />
+              parser={v => Number((moneda === 'CAD' ? v?.replace(/CA\$|,/g, '') : v?.replace(/[$\.]/g, '')) || 0)} />
           </Form.Item>
           <Form.Item name="descuento_3" label={`Descuento en el 3°+ examen (${moneda})`} initialValue={0} rules={[{ required: true }]}>
             <InputNumber min={0} step={moneda === 'CAD' ? 10 : 1000} style={{ width: '100%' }}
               formatter={v => moneda === 'CAD' ? `CA$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : `$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
-              parser={v => Number(v?.replace(/CA\$\s?|(\,)*|\$\s?|(\.)*/g, '') || 0)} />
+              parser={v => Number((moneda === 'CAD' ? v?.replace(/CA\$|,/g, '') : v?.replace(/[$\.]/g, '')) || 0)} />
           </Form.Item>
         </Form>
       </Modal>
