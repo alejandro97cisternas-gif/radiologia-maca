@@ -14,6 +14,7 @@ class Derivador(Base):
     telefono = Column(String, nullable=True)
     activo = Column(Boolean, default=True)
     color = Column(String, nullable=True, default="#6b7280", server_default="#6b7280")
+    moneda = Column(String(3), nullable=False, default="CLP", server_default="CLP")
     creado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     radiologo = relationship("Usuario", back_populates="derivadores")

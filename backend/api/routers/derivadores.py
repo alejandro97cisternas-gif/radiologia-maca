@@ -18,6 +18,7 @@ class DerivadorCreate(BaseModel):
     email: str
     telefono: str | None = None
     color: str = "#6b7280"
+    moneda: str = "CLP"
 
 
 class DerivadorUpdate(BaseModel):
@@ -26,6 +27,7 @@ class DerivadorUpdate(BaseModel):
     telefono: str | None = None
     activo: bool | None = None
     color: str | None = None
+    moneda: str | None = None
 
 
 class DerivadorResponse(BaseModel):
@@ -35,6 +37,7 @@ class DerivadorResponse(BaseModel):
     telefono: str | None
     activo: bool
     color: str | None = "#6b7280"
+    moneda: str = "CLP"
 
     class Config:
         from_attributes = True

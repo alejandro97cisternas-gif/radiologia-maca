@@ -22,7 +22,12 @@ interface TipoItem { nombre: string; dimension: '2D' | '3D' | 'AMBOS'; custom: b
 
 // ── Editor de exámenes + tarifas ──────────────────────────────────────────────
 
-function TarifasEditor({ derivadorId }: { derivadorId: number }) {
+function fmtMonto(v: number, moneda: string) {
+  if (moneda === 'CAD') return `CA$${v.toLocaleString('en-CA', { minimumFractionDigits: 0 })}`
+  return `$${v.toLocaleString('es-CL')}`
+}
+
+function TarifasEditor({ derivadorId, moneda }: { derivadorId: number; moneda: string }) {
   const [tarifas, setTarifas] = useState<TarifaRow[]>([])
   const [allTipos, setAllTipos] = useState<TipoItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -164,8 +169,8 @@ function TarifasEditor({ derivadorId }: { derivadorId: number }) {
       },
     },
     {
-      title: 'Precio', dataIndex: 'precio', key: 'precio', align: 'right' as const,
-      render: (v: number) => <span style={{ fontWeight: 600 }}>${v.toLocaleString('es-CL')}</span>,
+      title: `Precio (${moneda})`, dataIndex: 'precio', key: 'precio', align: 'right' as const,
+      render: (v: number) => <span style={{ fontWeight: 600 }}>{fmtMonto(v, moneda)}</span>,
     },
     {
       title: '', key: 'accion',
@@ -256,16 +261,16 @@ function TarifasEditor({ derivadorId }: { derivadorId: number }) {
 
           <Form.Item
             name="precio"
-            label="Precio (CLP)"
+            label={`Precio (${moneda})`}
             rules={[{ required: true, message: 'Ingresa el precio' }]}
           >
             <InputNumber
               min={0}
-              step={1000}
+              step={moneda === 'CAD' ? 10 : 1000}
               style={{ width: '100%' }}
-              formatter={v => `$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
-              parser={v => Number(v?.replace(/\$\s?|(\.)*/g, '') || 0)}
-              placeholder="$0"
+              formatter={v => moneda === 'CAD' ? `CA$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : `$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+              parser={v => Number(v?.replace(/CA\$\s?|(\,)*|\$\s?|(\.)*/g, '') || 0)}
+              placeholder={moneda === 'CAD' ? 'CA$0' : '$0'}
             />
           </Form.Item>
         </Form>
@@ -290,12 +295,12 @@ function TarifasEditor({ derivadorId }: { derivadorId: number }) {
                 : `Se agregarán ${examenesFaltantesCat.length} exámenes con el mismo precio.`}
             </Typography.Text>
           )}
-          <Form.Item name="precio" label="Precio por examen (CLP)" rules={[{ required: true }]}>
+          <Form.Item name="precio" label={`Precio por examen (${moneda})`} rules={[{ required: true }]}>
             <InputNumber
-              min={0} step={1000} style={{ width: '100%' }}
-              formatter={v => `$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
-              parser={v => Number(v?.replace(/\$\s?|(\.)*/g, '') || 0)}
-              placeholder="$0"
+              min={0} step={moneda === 'CAD' ? 10 : 1000} style={{ width: '100%' }}
+              formatter={v => moneda === 'CAD' ? `CA$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : `$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+              parser={v => Number(v?.replace(/CA\$\s?|(\,)*|\$\s?|(\.)*/g, '') || 0)}
+              placeholder={moneda === 'CAD' ? 'CA$0' : '$0'}
             />
           </Form.Item>
         </Form>
@@ -306,7 +311,7 @@ function TarifasEditor({ derivadorId }: { derivadorId: number }) {
 
 // ── Editor de convenios ───────────────────────────────────────────────────────
 
-function ConveniosEditor({ derivadorId }: { derivadorId: number }) {
+function ConveniosEditor({ derivadorId, moneda }: { derivadorId: number; moneda: string }) {
   const [convenios, setConvenios] = useState<ConvenioItem[]>([])
   const [tipos, setTipos] = useState<TipoItem[]>([])
   const [modalOpen, setModalOpen] = useState(false)
@@ -347,11 +352,11 @@ function ConveniosEditor({ derivadorId }: { derivadorId: number }) {
     { title: 'Categoría', dataIndex: 'categoria', key: 'categoria' },
     {
       title: '2° examen', dataIndex: 'descuento_2', key: 'd2',
-      render: (v: number) => v ? <Tag color="orange">-${v.toLocaleString('es-CL')}</Tag> : <Tag>Sin descuento</Tag>,
+      render: (v: number) => v ? <Tag color="orange">-{fmtMonto(v, moneda)}</Tag> : <Tag>Sin descuento</Tag>,
     },
     {
       title: '3°+ examen', dataIndex: 'descuento_3', key: 'd3',
-      render: (v: number) => v ? <Tag color="red">-${v.toLocaleString('es-CL')}</Tag> : <Tag>Sin descuento</Tag>,
+      render: (v: number) => v ? <Tag color="red">-{fmtMonto(v, moneda)}</Tag> : <Tag>Sin descuento</Tag>,
     },
     {
       title: '', key: 'accion',
@@ -382,15 +387,15 @@ function ConveniosEditor({ derivadorId }: { derivadorId: number }) {
             extra="Si ya existe un convenio para esta categoría, se actualizará.">
             <Select options={categorias} placeholder="Selecciona categoría" />
           </Form.Item>
-          <Form.Item name="descuento_2" label="Descuento en el 2° examen (CLP)" initialValue={0} rules={[{ required: true }]}>
-            <InputNumber min={0} step={1000} style={{ width: '100%' }}
-              formatter={v => `$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
-              parser={v => Number(v?.replace(/\$\s?|(\.)*/g, '') || 0)} />
+          <Form.Item name="descuento_2" label={`Descuento en el 2° examen (${moneda})`} initialValue={0} rules={[{ required: true }]}>
+            <InputNumber min={0} step={moneda === 'CAD' ? 10 : 1000} style={{ width: '100%' }}
+              formatter={v => moneda === 'CAD' ? `CA$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : `$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+              parser={v => Number(v?.replace(/CA\$\s?|(\,)*|\$\s?|(\.)*/g, '') || 0)} />
           </Form.Item>
-          <Form.Item name="descuento_3" label="Descuento en el 3°+ examen (CLP)" initialValue={0} rules={[{ required: true }]}>
-            <InputNumber min={0} step={1000} style={{ width: '100%' }}
-              formatter={v => `$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
-              parser={v => Number(v?.replace(/\$\s?|(\.)*/g, '') || 0)} />
+          <Form.Item name="descuento_3" label={`Descuento en el 3°+ examen (${moneda})`} initialValue={0} rules={[{ required: true }]}>
+            <InputNumber min={0} step={moneda === 'CAD' ? 10 : 1000} style={{ width: '100%' }}
+              formatter={v => moneda === 'CAD' ? `CA$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : `$${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+              parser={v => Number(v?.replace(/CA\$\s?|(\,)*|\$\s?|(\.)*/g, '') || 0)} />
           </Form.Item>
         </Form>
       </Modal>
@@ -514,7 +519,7 @@ export default function HonorariosPage() {
     }))
   }
 
-  const columnsDetalle = [
+  const columnsDetalle = (moneda: string) => [
     { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 100 },
     { title: 'Paciente', dataIndex: 'paciente', key: 'paciente', width: 180 },
     {
@@ -527,7 +532,7 @@ export default function HonorariosPage() {
               <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>{e.tipo_examen}</Tag>
               {e.descuento > 0 && (
                 <Tag color="orange" style={{ margin: 0, fontSize: 10 }}>
-                  -{`$${e.descuento.toLocaleString('es-CL')}`} {i === 1 ? '(2°)' : '(3°+)'}
+                  -{fmtMonto(e.descuento, moneda)} {i === 1 ? '(2°)' : '(3°+)'}
                 </Tag>
               )}
             </div>
@@ -539,10 +544,10 @@ export default function HonorariosPage() {
       title: 'Total caso', key: 'total', align: 'right' as const,
       render: (_: any, row: any) => (
         <div style={{ textAlign: 'right' }}>
-          <span style={{ fontWeight: 600 }}>${row.total.toLocaleString('es-CL')}</span>
+          <span style={{ fontWeight: 600 }}>{fmtMonto(row.total, moneda)}</span>
           {row.examenes.length > 1 && (
             <div style={{ fontSize: 10, color: '#9ca3af' }}>
-              {row.examenes.map((e: any) => `$${e.precio.toLocaleString('es-CL')}`).join(' + ')}
+              {row.examenes.map((e: any) => fmtMonto(e.precio, moneda)).join(' + ')}
             </div>
           )}
         </div>
@@ -551,20 +556,41 @@ export default function HonorariosPage() {
   ]
 
   const resumenGlobal = () => {
-    const totalGlobal = global.reduce((acc, d) => {
+    const totalCLP = global.filter(d => (d.moneda || 'CLP') === 'CLP').reduce((acc, d) => {
       const h = d.honorarios.find((x: any) => x.periodo === periodo)
       return acc + (h?.total || 0)
     }, 0)
+    const totalCAD = global.filter(d => d.moneda === 'CAD').reduce((acc, d) => {
+      const h = d.honorarios.find((x: any) => x.periodo === periodo)
+      return acc + (h?.total || 0)
+    }, 0)
+    const hayCAD = global.some(d => d.moneda === 'CAD')
     return (
       <div>
-        <Card style={{ marginBottom: 16 }}>
-          <Statistic
-            title={`Total acumulado ${periodo}`}
-            value={totalGlobal}
-            prefix="$"
-            formatter={v => Number(v).toLocaleString('es-CL')}
-          />
-        </Card>
+        <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Col>
+            <Card>
+              <Statistic
+                title={`Total CLP — ${periodo}`}
+                value={totalCLP}
+                prefix="$"
+                formatter={v => Number(v).toLocaleString('es-CL')}
+              />
+            </Card>
+          </Col>
+          {hayCAD && (
+            <Col>
+              <Card>
+                <Statistic
+                  title={`Total CAD — ${periodo}`}
+                  value={totalCAD}
+                  prefix="CA$"
+                  formatter={v => Number(v).toLocaleString('en-CA', { minimumFractionDigits: 0 })}
+                />
+              </Card>
+            </Col>
+          )}
+        </Row>
         <Divider orientation="left" style={{ marginTop: 28 }}>
           <Typography.Text strong style={{ fontSize: 14 }}>Por clínica — {periodo}</Typography.Text>
         </Divider>
@@ -574,12 +600,20 @@ export default function HonorariosPage() {
           pagination={false}
           size="small"
           columns={[
-            { title: 'Clínica', dataIndex: 'derivador_nombre', key: 'nombre' },
+            {
+              title: 'Clínica', key: 'nombre',
+              render: (_: any, d: any) => (
+                <Space size={6}>
+                  {d.derivador_nombre}
+                  <Tag color={d.moneda === 'CAD' ? 'purple' : 'blue'} style={{ margin: 0, fontSize: 10 }}>{d.moneda || 'CLP'}</Tag>
+                </Space>
+              ),
+            },
             {
               title: `Total ${periodo}`, key: 'total',
               render: (_: any, d: any) => {
                 const h = d.honorarios.find((x: any) => x.periodo === periodo)
-                return h ? `$${Number(h.total).toLocaleString('es-CL')}` : '—'
+                return h ? fmtMonto(Number(h.total), d.moneda || 'CLP') : '—'
               },
             },
             {
@@ -600,19 +634,25 @@ export default function HonorariosPage() {
     { key: 'resumen', label: 'Resumen global', children: resumenGlobal() },
     ...derivadores.map(d => {
       const detalle = detalles[d.id]
+      const moneda = d.moneda || 'CLP'
       return {
         key: String(d.id),
-        label: d.nombre,
+        label: (
+          <Space size={4}>
+            {d.nombre}
+            {moneda === 'CAD' && <Tag color="purple" style={{ margin: 0, fontSize: 10 }}>CAD</Tag>}
+          </Space>
+        ),
         children: (
           <Spin spinning={loading}>
             {/* ── Honorarios del período ─────────────────────────── */}
             <Row gutter={16} align="middle" style={{ marginBottom: 16 }}>
               <Col>
                 <Statistic
-                  title="Total del período"
+                  title={`Total del período (${moneda})`}
                   value={detalle?.total || 0}
-                  prefix="$"
-                  formatter={v => Number(v).toLocaleString('es-CL')}
+                  prefix={moneda === 'CAD' ? 'CA$' : '$'}
+                  formatter={v => moneda === 'CAD' ? Number(v).toLocaleString('en-CA', { minimumFractionDigits: 0 }) : Number(v).toLocaleString('es-CL')}
                 />
               </Col>
               <Col flex="auto" />
@@ -659,7 +699,7 @@ export default function HonorariosPage() {
 
             <Table
               dataSource={agruparDetalle(detalle?.detalle || [])}
-              columns={columnsDetalle}
+              columns={columnsDetalle(moneda)}
               rowKey="key"
               pagination={false}
               size="small"
@@ -667,7 +707,7 @@ export default function HonorariosPage() {
                 <Table.Summary.Row>
                   <Table.Summary.Cell index={0} colSpan={3}><strong>TOTAL</strong></Table.Summary.Cell>
                   <Table.Summary.Cell index={3} align="right">
-                    <strong>${Number(detalle.total).toLocaleString('es-CL')}</strong>
+                    <strong>{fmtMonto(Number(detalle.total), moneda)}</strong>
                   </Table.Summary.Cell>
                 </Table.Summary.Row>
               ) : null}
@@ -677,13 +717,13 @@ export default function HonorariosPage() {
             <Divider orientation="left" style={{ marginTop: 32 }}>
               <Typography.Text strong style={{ fontSize: 14 }}>Tarifas por tipo de examen</Typography.Text>
             </Divider>
-            <TarifasEditor derivadorId={d.id} />
+            <TarifasEditor derivadorId={d.id} moneda={moneda} />
 
             {/* ── Convenios ──────────────────────────────────────── */}
             <Divider orientation="left" style={{ marginTop: 32 }}>
               <Typography.Text strong style={{ fontSize: 14 }}>Convenios de descuento</Typography.Text>
             </Divider>
-            <ConveniosEditor derivadorId={d.id} />
+            <ConveniosEditor derivadorId={d.id} moneda={moneda} />
 
           </Spin>
         ),

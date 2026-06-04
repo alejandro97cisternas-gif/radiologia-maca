@@ -7,6 +7,7 @@ export interface Derivador {
   telefono?: string
   activo: boolean
   color?: string
+  moneda: string
 }
 
 export const getDerivadores = () => api.get<Derivador[]>('/api/derivadores').then(r => r.data)

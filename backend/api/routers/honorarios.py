@@ -93,6 +93,7 @@ def resumen_global(request: Request, db: Session = Depends(get_db), _=Depends(ge
         {
             "derivador_id": d.id,
             "derivador_nombre": d.nombre,
+            "moneda": d.moneda,
             "honorarios": [
                 {"periodo": h.periodo, "total": int(h.total), "estado": h.estado, "enviado_en": h.enviado_en}
                 for h in db.query(Honorario).filter(Honorario.derivador_id == d.id).order_by(Honorario.periodo.desc()).all()
@@ -108,21 +109,22 @@ def detalle_derivador(derivador_id: int, request: Request, periodo: str = Query(
     derivador = _derivador_del_tenant(derivador_id, radiologo.id, db)
     total, detalle = _calcular_detalle(derivador_id, periodo, db, radiologo.id)
     honorario = db.query(Honorario).filter(Honorario.derivador_id == derivador_id, Honorario.periodo == periodo).first()
-    return {"derivador": derivador.nombre, "periodo": periodo, "total": total, "estado": honorario.estado if honorario else "SIN_GENERAR", "detalle": detalle}
+    return {"derivador": derivador.nombre, "moneda": derivador.moneda, "periodo": periodo, "total": total, "estado": honorario.estado if honorario else "SIN_GENERAR", "detalle": detalle}
 
 
 @router.post("/{derivador_id}/generar")
 def generar(derivador_id: int, request: Request, periodo: str = Query(...), db: Session = Depends(get_db), _=Depends(get_current_user)):
     radiologo = get_tenant(request)
-    _derivador_del_tenant(derivador_id, radiologo.id, db)
+    derivador = _derivador_del_tenant(derivador_id, radiologo.id, db)
     total, detalle = _calcular_detalle(derivador_id, periodo, db, radiologo.id)
     honorario = db.query(Honorario).filter(Honorario.derivador_id == derivador_id, Honorario.periodo == periodo).first()
     if honorario:
         honorario.total = total
+        honorario.moneda = derivador.moneda
         honorario.detalle_json = json.dumps(detalle, ensure_ascii=False)
         honorario.estado = "BORRADOR"
     else:
-        honorario = Honorario(derivador_id=derivador_id, periodo=periodo, total=total, detalle_json=json.dumps(detalle, ensure_ascii=False), estado="BORRADOR")
+        honorario = Honorario(derivador_id=derivador_id, periodo=periodo, total=total, moneda=derivador.moneda, detalle_json=json.dumps(detalle, ensure_ascii=False), estado="BORRADOR")
         db.add(honorario)
     db.commit()
     db.refresh(honorario)
@@ -334,9 +336,12 @@ def _generar_pdf(derivador, honorario, periodo: str) -> bytes:
     cell_style = ParagraphStyle("cell", fontName="Helvetica", fontSize=8, leading=10, wordWrap="CJK")
     bold_style = ParagraphStyle("bold_cell", fontName="Helvetica-Bold", fontSize=8, leading=10)
 
+    moneda = getattr(derivador, "moneda", "CLP")
+    simbolo = "CA$" if moneda == "CAD" else "$"
+
     elements = [
         Paragraph(f"Honorarios — {derivador.nombre}", styles["Heading1"]),
-        Paragraph(f"Período: {periodo}", styles["Normal"]),
+        Paragraph(f"Período: {periodo}  |  Moneda: {moneda}", styles["Normal"]),
         Spacer(1, 20),
     ]
 
@@ -353,12 +358,12 @@ def _generar_pdf(derivador, honorario, periodo: str) -> bytes:
             Paragraph(item["fecha"], cell_style),
             Paragraph(item["paciente"], cell_style),
             Paragraph(item["tipo_examen"], cell_style),
-            Paragraph(f"${item['precio']:,}", cell_style),
+            Paragraph(f"{simbolo}{item['precio']:,}", cell_style),
         ])
     data.append([
         Paragraph("", cell_style), Paragraph("", cell_style),
         Paragraph("<b>TOTAL</b>", bold_style),
-        Paragraph(f"<b>${int(honorario.total):,}</b>", bold_style),
+        Paragraph(f"<b>{simbolo}{int(honorario.total):,}</b>", bold_style),
     ])
 
     tabla = Table(data, colWidths=[65, 155, 195, 80])

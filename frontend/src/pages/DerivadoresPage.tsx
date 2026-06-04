@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Table, Button, Modal, Form, Input, Space, Tag, message, Popconfirm, Typography, Tooltip, Alert, ColorPicker } from 'antd'
+import { Table, Button, Modal, Form, Input, Select, Space, Tag, message, Popconfirm, Typography, Tooltip, Alert, ColorPicker } from 'antd'
 import { PlusOutlined, LinkOutlined, EditOutlined, StopOutlined } from '@ant-design/icons'
 import { getDerivadores, crearDerivador, actualizarDerivador, eliminarDerivador, generarMagicLink } from '../api/derivadores'
 import type { Derivador } from '../api/derivadores'
@@ -78,6 +78,10 @@ export default function DerivadoresPage() {
     { title: 'Email', dataIndex: 'email', key: 'email' },
     { title: 'Teléfono', dataIndex: 'telefono', key: 'telefono', render: (v: string) => v || '-' },
     {
+      title: 'Moneda', dataIndex: 'moneda', key: 'moneda',
+      render: (v: string) => <Tag color={v === 'CAD' ? 'purple' : 'blue'}>{v || 'CLP'}</Tag>,
+    },
+    {
       title: 'Estado', dataIndex: 'activo', key: 'activo',
       render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? 'Activo' : 'Inactivo'}</Tag>
     },
@@ -148,6 +152,12 @@ export default function DerivadoresPage() {
           </Form.Item>
           <Form.Item name="telefono" label="Teléfono">
             <Input />
+          </Form.Item>
+          <Form.Item name="moneda" label="Moneda de cobro" initialValue="CLP" rules={[{ required: true }]}>
+            <Select options={[
+              { value: 'CLP', label: 'CLP — Peso chileno' },
+              { value: 'CAD', label: 'CAD — Dólar canadiense' },
+            ]} />
           </Form.Item>
           <Form.Item name="color" label="Color identificador">
             <ColorPicker
