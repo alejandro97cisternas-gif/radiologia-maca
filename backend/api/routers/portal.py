@@ -530,7 +530,39 @@ def confirmar_tareas(
     return {"confirmados": confirmados}
 
 
-# ── Notificación explícita ────────────────────────────────────────────────────
+# ── Notificación de caso (un email por caso, todos los exámenes) ─────────────
+
+class NotificarCasoBody(BaseModel):
+    examen_ids: list[int]
+
+
+@router.post("/notificar-caso")
+def notificar_caso(
+    body: NotificarCasoBody,
+    derivador: Derivador = Depends(get_portal_derivador),
+    db: Session = Depends(get_db),
+):
+    examenes = [
+        db.query(Examen).filter(Examen.id == eid, Examen.derivador_id == derivador.id).first()
+        for eid in body.examen_ids
+    ]
+    examenes = [e for e in examenes if e is not None]
+    if not examenes:
+        raise HTTPException(404, "No se encontraron exámenes")
+
+    paciente = examenes[0].paciente
+    radiologo = derivador.radiologo
+    ok, msg = enviar_tarea_pendiente_a_doctora(
+        derivador, paciente, examenes,
+        radiologo_email=radiologo.email or "",
+    )
+    for e in examenes:
+        e.notificacion_doctora_enviada = True
+    db.commit()
+    return {"notificado": ok, "mensaje": msg}
+
+
+# ── Notificación individual (legacy) ─────────────────────────────────────────
 
 @router.post("/examenes/{examen_id}/notificar")
 def notificar_doctora(
@@ -543,13 +575,9 @@ def notificar_doctora(
     ).first()
     if not examen:
         raise HTTPException(404, "Examen no encontrado")
-
-    if not examen.imagenes:
-        raise HTTPException(400, "No hay imágenes subidas. Suba las imágenes antes de notificar.")
-
     radiologo = derivador.radiologo
     ok, msg = enviar_tarea_pendiente_a_doctora(
-        derivador, examen.paciente, examen,
+        derivador, examen.paciente, [examen],
         radiologo_email=radiologo.email or "",
     )
     examen.notificacion_doctora_enviada = True

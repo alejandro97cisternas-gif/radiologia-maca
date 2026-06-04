@@ -188,23 +188,27 @@ def enviar_magic_link_portal(derivador, link: str, radiologo_nombre: str = "Radi
     return _send(derivador.email, f"Acceso a su portal · {derivador.nombre} · {radiologo_nombre}", _html(body, titulo), from_name=radiologo_nombre or None)
 
 
-def enviar_tarea_pendiente_a_doctora(derivador, paciente, examen, radiologo_email: str = "") -> tuple[bool, str]:
+def enviar_tarea_pendiente_a_doctora(derivador, paciente, examenes: list, radiologo_email: str = "") -> tuple[bool, str]:
     if not radiologo_email:
         return False, "Email del radiólogo no configurado."
+    tipos = ", ".join(e.tipo_examen for e in examenes)
+    filas = "".join(_row("Examen", e.tipo_examen) for e in examenes)
     body = (
         _h("Nueva tarea pendiente")
-        + _p(f"La clínica <strong>{derivador.nombre}</strong> subió un nuevo examen.")
+        + _p(f"La clínica <strong>{derivador.nombre}</strong> subió {'un examen' if len(examenes) == 1 else f'{len(examenes)} exámenes'}.")
         + _table(
             _row("Paciente", paciente.nombre_completo),
             _row("RUT", paciente.rut or "-"),
-            _row("Tipo de examen", examen.tipo_examen),
+            filas,
             _row("Clínica", derivador.nombre),
         )
     )
+    asunto = f"Nueva tarea: {tipos} · {paciente.nombre_completo}"
     return _send(
         radiologo_email,
-        f"Nueva tarea: {examen.tipo_examen} · {paciente.nombre_completo}",
+        asunto,
         _html(body),
+        from_name=derivador.nombre,
     )
 
 

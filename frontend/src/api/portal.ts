@@ -78,7 +78,11 @@ export const portalEliminarExamen = (examenId: number) =>
 export const portalConfirmarTareas = (examenIds: number[]) =>
   portalApi.post('/api/portal/confirmar-tareas', { examen_ids: examenIds }).then(r => r.data)
 
-// Notificación explícita
+// Notificación de caso (un email por todos los exámenes)
+export const portalNotificarCaso = (examenIds: number[]) =>
+  portalApi.post('/api/portal/notificar-caso', { examen_ids: examenIds }).then(r => r.data)
+
+// Notificación individual (legacy)
 export const portalNotificarDoctora = (examenId: number) =>
   portalApi.post(`/api/portal/examenes/${examenId}/notificar`).then(r => r.data)
 

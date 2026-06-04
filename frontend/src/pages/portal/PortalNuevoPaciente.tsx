@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import {
   portalBuscarPaciente, portalCrearPaciente, portalCrearExamen,
-  portalSubirImagen, portalConfirmarTareas, portalNotificarDoctora,
+  portalSubirImagen, portalConfirmarTareas, portalNotificarCaso,
   portalGetTipos,
 } from '../../api/portal'
 
@@ -424,9 +424,7 @@ export default function PortalNuevoPaciente() {
     try {
       const ids = examenesListos.map(e => e.examen_id!)
       await portalConfirmarTareas(ids)
-      for (const e of examenesListos) {
-        try { await portalNotificarDoctora(e.examen_id!) } catch { /* continúa */ }
-      }
+      await portalNotificarCaso(ids)
       setNotificado(true)
       Modal.success({
         title: 'Notificación exitosa',
