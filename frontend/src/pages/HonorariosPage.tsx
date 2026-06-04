@@ -110,11 +110,12 @@ function TarifasEditor({ derivadorId, moneda }: { derivadorId: number; moneda: s
   const categoriaOptions = useMemo(() => {
     const conteo = allTipos.reduce<Record<string, number>>((acc, t) => {
       const c = t.categoria
+      if (!c) return acc
       acc[c] = (acc[c] || 0) + 1
       return acc
     }, {})
     return Object.entries(conteo)
-      .filter(([c, n]) => n > 1 && c !== 'undefined')
+      .filter(([, n]) => n > 1)
       .map(([c]) => ({ value: c, label: c }))
   }, [allTipos])
 
