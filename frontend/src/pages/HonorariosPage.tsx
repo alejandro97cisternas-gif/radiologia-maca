@@ -115,7 +115,6 @@ function TarifasEditor({ derivadorId, moneda }: { derivadorId: number; moneda: s
       return acc
     }, {})
     return Object.entries(conteo)
-      .filter(([, n]) => n > 1)
       .map(([c]) => ({ value: c, label: c }))
   }, [allTipos])
 
