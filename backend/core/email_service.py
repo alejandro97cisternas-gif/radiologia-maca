@@ -75,17 +75,10 @@ def _p(text: str) -> str:
 
 
 def _from_addr(nombre: str | None) -> str:
-    import re
-    base = settings.EMAIL_ADDRESS
-    if not base:
-        m = re.search(r"<(.+?)>", settings.EMAIL_FROM)
-        base = m.group(1) if m else (settings.EMAIL_FROM if "@" in settings.EMAIL_FROM else settings.SMTP_USER)
-    if not base:
-        base = settings.SMTP_USER
-    if nombre:
-        safe = nombre.replace("\\", "\\\\").replace('"', '\\"')
-        return f'"{safe}" <{base}>'
-    return settings.EMAIL_FROM
+    from email.utils import formataddr
+    addr = (settings.EMAIL_ADDRESS or settings.SMTP_USER or "").strip()
+    display = (nombre or "Radiología").strip()
+    return formataddr((display, addr))
 
 
 def _send(to: str, subject: str, html: str,
