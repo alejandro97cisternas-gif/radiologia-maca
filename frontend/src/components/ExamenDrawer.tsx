@@ -133,23 +133,25 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
       }
       footer={
         examenes.length > 0 ? (
-          yaNotificado ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#16a34a', padding: '8px 0' }}>
-              <CheckCircleOutlined style={{ fontSize: 18 }} />
-              <Typography.Text style={{ color: '#16a34a', fontWeight: 600 }}>Enviado al derivador</Typography.Text>
-            </div>
-          ) : (
-            <Button
-              type="primary"
-              block
-              disabled={!todosConInforme}
-              loading={enviando}
-              onClick={handleEnviarDerivador}
-              style={{ background: todosConInforme ? '#1e3a5f' : undefined }}
-            >
-              {todosConInforme ? 'Enviar informes al derivador' : 'Sube todos los informes para enviar'}
-            </Button>
-          )
+          <Button
+            block
+            disabled={!todosConInforme}
+            loading={enviando}
+            onClick={handleEnviarDerivador}
+            style={
+              !todosConInforme
+                ? undefined
+                : yaNotificado
+                ? { background: '#d97706', borderColor: '#d97706', color: '#fff' }
+                : { background: '#1e3a5f', borderColor: '#1e3a5f', color: '#fff' }
+            }
+          >
+            {!todosConInforme
+              ? 'Sube todos los informes para enviar'
+              : yaNotificado
+              ? '⚠ Ya enviado · Reenviar al derivador'
+              : 'Enviar informes al derivador'}
+          </Button>
         ) : null
       }
     >
