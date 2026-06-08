@@ -95,7 +95,9 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
     setEnviando(true)
     try {
       const res = await notificarDerivador(caso.caso_id)
-      if (res.reenvio) {
+      if (!res.enviado) {
+        message.error(`Error al enviar: ${res.mensaje}`)
+      } else if (res.reenvio) {
         message.warning('Reenvío: el derivador ya había sido notificado anteriormente')
       } else {
         message.success('Informes enviados al derivador')
