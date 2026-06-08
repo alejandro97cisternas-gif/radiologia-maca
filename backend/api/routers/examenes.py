@@ -236,6 +236,7 @@ def notificar_derivador(caso_id: str, request: Request, db: Session = Depends(ge
         {"tipo_examen": e.tipo_examen, "link_pdf": get_url(e.informe.ruta_pdf)}
         for e in examenes
     ]
+    ya_enviado = any(e.notificacion_derivador_enviada for e in examenes)
     ok, msg = enviar_caso_listo_a_derivador(
         examenes[0].derivador, examenes[0].paciente, examenes_con_links, link_portal,
         radiologo_nombre=radiologo.nombre_display or "Radiología",
@@ -244,7 +245,7 @@ def notificar_derivador(caso_id: str, request: Request, db: Session = Depends(ge
         for e in examenes:
             e.notificacion_derivador_enviada = True
         db.commit()
-    return {"enviado": ok, "mensaje": msg}
+    return {"enviado": ok, "mensaje": msg, "reenvio": ya_enviado}
 
 
 @router.patch("/caso/{caso_id}/estado")

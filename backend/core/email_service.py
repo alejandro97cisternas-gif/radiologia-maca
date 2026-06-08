@@ -122,6 +122,13 @@ def _send_resend(to: str, subject: str, html: str,
         return False, str(e)
 
 
+def _strip_html(html: str) -> str:
+    import re
+    text = re.sub(r"<[^>]+>", " ", html)
+    text = re.sub(r"[ \t]+", " ", text)
+    return "\n".join(line.strip() for line in text.splitlines() if line.strip())
+
+
 def _send_smtp(to: str, subject: str, html: str,
                attachments: list[tuple[str, bytes, str]] | None = None,
                from_addr: str | None = None) -> tuple[bool, str]:
@@ -129,13 +136,26 @@ def _send_smtp(to: str, subject: str, html: str,
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
     from email.mime.base import MIMEBase
+    from email.utils import formatdate, make_msgid
     from email import encoders
 
-    msg = MIMEMultipart("mixed")
-    msg["From"] = from_addr or settings.SMTP_USER
-    msg["To"] = to
-    msg["Subject"] = subject
-    msg.attach(MIMEText(html, "html", "utf-8"))
+    sender = from_addr or settings.SMTP_USER
+
+    # multipart/mixed wraps multipart/alternative + adjuntos
+    outer = MIMEMultipart("mixed")
+    outer["From"] = sender
+    outer["To"] = to
+    outer["Subject"] = subject
+    outer["Date"] = formatdate(localtime=False)
+    outer["Message-ID"] = make_msgid(domain=settings.SMTP_USER.split("@")[-1])
+    outer["MIME-Version"] = "1.0"
+    outer["Reply-To"] = sender
+
+    # Parte alternativa: texto plano + HTML
+    alt = MIMEMultipart("alternative")
+    alt.attach(MIMEText(_strip_html(html), "plain", "utf-8"))
+    alt.attach(MIMEText(html, "html", "utf-8"))
+    outer.attach(alt)
 
     if attachments:
         for _, data, filename in attachments:
@@ -143,14 +163,14 @@ def _send_smtp(to: str, subject: str, html: str,
             part.set_payload(data)
             encoders.encode_base64(part)
             part.add_header("Content-Disposition", f'attachment; filename="{filename}"')
-            msg.attach(part)
+            outer.attach(part)
 
     try:
         with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as server:
             server.ehlo()
             server.starttls()
             server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-            server.sendmail(settings.SMTP_USER, to, msg.as_string())
+            server.sendmail(settings.SMTP_USER, to, outer.as_string())
         return True, f"Enviado a {to}"
     except Exception as e:
         logger.error("SMTP error: %s", e)

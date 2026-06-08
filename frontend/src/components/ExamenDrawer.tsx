@@ -94,8 +94,12 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
     if (!caso) return
     setEnviando(true)
     try {
-      await notificarDerivador(caso.caso_id)
-      message.success('Informes enviados al derivador')
+      const res = await notificarDerivador(caso.caso_id)
+      if (res.reenvio) {
+        message.warning('Reenvío: el derivador ya había sido notificado anteriormente')
+      } else {
+        message.success('Informes enviados al derivador')
+      }
       const data = await getCasoDetalle(caso.caso_id)
       setExamenes(data.examenes as ExamenConImagenes[])
     } catch {
