@@ -51,6 +51,43 @@ def _r2_upload(key: str, datos: bytes, content_type: str = "application/octet-st
     )
 
 
+def _r2_upload_file(key: str, archivo: Path, content_type: str = "application/octet-stream") -> None:
+    """Upload streaming desde disco — no carga el archivo en RAM."""
+    with open(archivo, "rb") as f:
+        _r2_client().upload_fileobj(
+            f, settings.R2_BUCKET, key,
+            ExtraArgs={"ContentType": content_type},
+        )
+
+
+def guardar_desde_archivo(key: str, archivo: Path, content_type: str = "application/octet-stream") -> str:
+    """Guarda un archivo ya en disco a storage sin cargarlo en RAM."""
+    if _is_r2():
+        _r2_upload_file(key, archivo, content_type)
+    else:
+        import shutil as _sh
+        dst = STORAGE_ROOT / key
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        _sh.copy2(archivo, dst)
+    return key
+
+
+def key_dicom(radiologo_id: int, derivador_id: int, rut: str, orden_id: int,
+              tipo_examen: str, nombre: str, ubicacion: str = "", dim: str | None = None) -> str:
+    sub = f"dicom/{ubicacion}/{nombre}" if ubicacion else f"dicom/{nombre}"
+    return f"{_key_base(radiologo_id, derivador_id, rut, orden_id, tipo_examen, dim)}/imagen/{sub}"
+
+
+def key_imagen_2d(radiologo_id: int, derivador_id: int, rut: str, orden_id: int,
+                  tipo_examen: str, nombre: str, dim: str | None = None) -> str:
+    return f"{_key_base(radiologo_id, derivador_id, rut, orden_id, tipo_examen, dim)}/imagen/{nombre}"
+
+
+def key_preview_3d(radiologo_id: int, derivador_id: int, rut: str, orden_id: int,
+                   tipo_examen: str, nombre: str, dim: str | None = None) -> str:
+    return f"{_key_base(radiologo_id, derivador_id, rut, orden_id, tipo_examen, dim)}/imagen/preview/{nombre}"
+
+
 def _r2_delete_prefix(prefix: str) -> None:
     client = _r2_client()
     paginator = client.get_paginator("list_objects_v2")
