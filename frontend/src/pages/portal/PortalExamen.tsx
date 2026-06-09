@@ -17,6 +17,7 @@ import {
 import { portalGetIncidencia, portalResolverIncidencia } from '../../api/incidencias'
 import type { Incidencia } from '../../api/incidencias'
 import { message } from 'antd'
+import NovexBadge from '../../components/NovexBadge'
 
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const resolveUrl = (url: string) => url.startsWith('http') ? url : `${BASE}${url}`
@@ -617,6 +618,7 @@ export default function PortalExamen() {
           />
         </div>
       )}
+      <NovexBadge style={{ marginTop: 32 }} />
     </div>
   )
 }

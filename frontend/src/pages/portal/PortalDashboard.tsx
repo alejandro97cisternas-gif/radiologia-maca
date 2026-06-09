@@ -16,6 +16,7 @@ import PanelIncidencias from '../../components/PanelIncidencias'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
 import { portalMe, portalGetExamenes, portalEliminarExamen, portalGetNotificaciones, portalLeerNotificacion, portalLeerTodas } from '../../api/portal'
+import NovexBadge from '../../components/NovexBadge'
 import type { NotificacionPortal } from '../../api/portal'
 
 const { Sider, Content, Header } = Layout
@@ -311,19 +312,20 @@ export default function PortalDashboard() {
   return (
     <>
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider width={200} style={{ background: '#1e3a5f' }}>
+      <Sider width={200} style={{ background: '#1e3a5f', display: 'flex', flexDirection: 'column' }}>
         <div id="portal-titulo" style={{ padding: '20px 16px', color: '#fff', fontWeight: 700, fontSize: 14 }}>
           Portal Clínica
         </div>
         <Menu
           theme="dark"
           defaultSelectedKeys={['dashboard']}
-          style={{ background: '#1e3a5f', border: 'none' }}
+          style={{ background: '#1e3a5f', border: 'none', flex: 1 }}
           items={[
             { key: 'dashboard', label: 'Mis exámenes', onClick: () => navigate('/portal/dashboard') },
             { key: 'tarifas', icon: <DollarOutlined />, label: <span id="portal-tarifas-link">Tarifas</span>, onClick: () => navigate('/portal/tarifas') },
           ]}
         />
+        <NovexBadge dark />
       </Sider>
 
       <Layout style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>

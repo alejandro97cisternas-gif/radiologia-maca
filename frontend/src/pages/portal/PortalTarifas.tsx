@@ -3,6 +3,7 @@ import { Table, Typography, Tag, Button } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { portalGetTarifas } from '../../api/portal'
+import NovexBadge from '../../components/NovexBadge'
 
 export default function PortalTarifas() {
   const navigate = useNavigate()
@@ -43,6 +44,7 @@ export default function PortalTarifas() {
           },
         ]}
       />
+      <NovexBadge style={{ marginTop: 32 }} />
     </div>
   )
 }

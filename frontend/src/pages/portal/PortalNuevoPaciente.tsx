@@ -13,6 +13,7 @@ import {
   portalSubirImagen, portalConfirmarTareas, portalNotificarCaso,
   portalGetTipos,
 } from '../../api/portal'
+import NovexBadge from '../../components/NovexBadge'
 
 interface TipoExamen { nombre: string; dimension: '2D' | '3D' | 'AMBOS'; categoria?: string; custom: boolean }
 
@@ -620,6 +621,7 @@ export default function PortalNuevoPaciente() {
             </Button>
           </Card>
         )}
+      <NovexBadge style={{ marginTop: 32 }} />
       </div>
     </div>
   )
