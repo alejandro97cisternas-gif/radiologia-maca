@@ -44,6 +44,7 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/portal/acceder" element={<PortalAcceso />} />
+            <Route path="/portal/acceder/:slug" element={<PortalAcceso />} />
             <Route path="/portal/dashboard" element={<PortalDashboard />} />
             <Route path="/portal/nuevo-paciente" element={<PortalNuevoPaciente />} />
             <Route path="/portal/examen/:id" element={<PortalExamen />} />

@@ -15,6 +15,8 @@ class Derivador(Base):
     activo = Column(Boolean, default=True)
     color = Column(String, nullable=True, default="#6b7280", server_default="#6b7280")
     moneda = Column(String(3), nullable=False, default="CLP", server_default="CLP")
+    portal_token = Column(String, unique=True, nullable=True)
+    portal_slug = Column(String, nullable=True)
     creado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     radiologo = relationship("Usuario", back_populates="derivadores")

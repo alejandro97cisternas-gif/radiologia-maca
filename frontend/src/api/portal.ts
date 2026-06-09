@@ -3,8 +3,8 @@ import portalApi from './portalClient'
 
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-export const portalAcceder = (token: string) =>
-  axios.get(`${BASE}/api/portal/acceder?token=${token}`).then(r => r.data)
+export const portalAcceder = (slug: string, t: string) =>
+  axios.get(`${BASE}/api/portal/acceder/${encodeURIComponent(slug)}?t=${encodeURIComponent(t)}`).then(r => r.data)
 
 export const portalSolicitarAcceso = (email: string) =>
   axios.post(`${BASE}/api/portal/solicitar-acceso`, { email }).then(r => r.data)

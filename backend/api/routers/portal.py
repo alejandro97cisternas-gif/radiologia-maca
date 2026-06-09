@@ -1,4 +1,4 @@
-from datetime import datetime, timezone, date as DateType
+from datetime import date as DateType
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -11,7 +11,7 @@ from core.storage import (
     get_url, dimension, eliminar_carpeta_examen,
 )
 from core.email_service import enviar_tarea_pendiente_a_doctora
-from modulos.derivadores.models import Derivador, PortalMagicLink
+from modulos.derivadores.models import Derivador
 from modulos.incidencias.models import Incidencia
 from modulos.pacientes.models import Paciente
 from modulos.examenes.models import Examen, ImagenExamen, RevisionExamen, TipoExamenCustom
@@ -35,35 +35,19 @@ class SolicitarAccesoBody(BaseModel):
 def solicitar_acceso(body: SolicitarAccesoBody, db: Session = Depends(get_db)):
     from core.email_service import enviar_magic_link_portal
     from core.config import settings
-    import uuid
-    from datetime import timedelta
-
     from sqlalchemy import func
+
     email_input = body.email.strip()
     derivador = db.query(Derivador).filter(
         func.lower(Derivador.email) == email_input.lower(),
         Derivador.activo == True,
     ).first()
-    # Respuesta genérica para no revelar si el email existe
     if not derivador:
         return {"mensaje": "Si el email está registrado, recibirás el enlace en breve."}
 
-    db.query(PortalMagicLink).filter(
-        PortalMagicLink.derivador_id == derivador.id,
-        PortalMagicLink.activo == True,
-    ).update({"activo": False})
-
-    token = str(uuid.uuid4())
-    link = PortalMagicLink(
-        derivador_id=derivador.id,
-        token=token,
-        expira_en=datetime.utcnow() + timedelta(hours=24),
-    )
-    db.add(link)
-    db.commit()
-
-    url = f"{settings.FRONTEND_URL}/portal/acceder?token={token}"
-    enviar_magic_link_portal(derivador, url)
+    radiologo = derivador.radiologo
+    url = f"https://{radiologo.slug}.{settings.BASE_DOMAIN}/portal/acceder/{derivador.portal_slug}?t={derivador.portal_token}"
+    enviar_magic_link_portal(derivador, url, radiologo_nombre=radiologo.nombre_display or "Radiología")
     return {"mensaje": "Si el email está registrado, recibirás el enlace en breve."}
 
 
@@ -83,21 +67,16 @@ def _resolver_dim(tipo_examen: str, radiologo_id: int, db: Session) -> str:
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
-@router.get("/acceder")
-def acceder(token: str, db: Session = Depends(get_db)):
-    link = db.query(PortalMagicLink).filter(
-        PortalMagicLink.token == token,
-        PortalMagicLink.activo == True,
+@router.get("/acceder/{slug}")
+def acceder(slug: str, t: str = Query(...), db: Session = Depends(get_db)):
+    derivador = db.query(Derivador).filter(
+        Derivador.portal_token == t,
+        Derivador.portal_slug == slug,
+        Derivador.activo == True,
     ).first()
-    if not link:
-        raise HTTPException(401, "Enlace inválido o ya usado")
-    if link.expira_en < datetime.now(timezone.utc).replace(tzinfo=None):
-        raise HTTPException(401, "Enlace expirado")
-
-    link.activo = False
-    db.commit()
-
-    jwt = crear_token({"sub": str(link.derivador_id), "tipo": "portal"}, expires_minutes=60 * 24 * 7)
+    if not derivador:
+        raise HTTPException(401, "Enlace inválido")
+    jwt = crear_token({"sub": str(derivador.id), "tipo": "portal"}, expires_minutes=60 * 24 * 30)
     return {"access_token": jwt, "token_type": "bearer"}
 
 

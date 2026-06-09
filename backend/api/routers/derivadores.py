@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -8,7 +7,8 @@ from core.dependencies import get_current_user
 from core.tenant import get_tenant
 from core.email_service import enviar_magic_link_portal
 from core.config import settings
-from modulos.derivadores.models import Derivador, PortalMagicLink
+from core.slugify import slugify
+from modulos.derivadores.models import Derivador
 
 router = APIRouter(prefix="/api/derivadores", tags=["derivadores"])
 
@@ -38,6 +38,8 @@ class DerivadorResponse(BaseModel):
     activo: bool
     color: str | None = "#6b7280"
     moneda: str = "CLP"
+    portal_slug: str | None = None
+    portal_token: str | None = None
 
     class Config:
         from_attributes = True
@@ -49,10 +51,33 @@ def listar(request: Request, db: Session = Depends(get_db), _=Depends(get_curren
     return db.query(Derivador).filter(Derivador.radiologo_id == radiologo.id).order_by(Derivador.nombre).all()
 
 
+def _generar_portal_slug(nombre: str, radiologo_id: int, db: Session, exclude_id: int | None = None) -> str:
+    base = slugify(nombre)
+    slug = base
+    count = 1
+    while True:
+        q = db.query(Derivador).filter(
+            Derivador.radiologo_id == radiologo_id,
+            Derivador.portal_slug == slug,
+        )
+        if exclude_id:
+            q = q.filter(Derivador.id != exclude_id)
+        if not q.first():
+            return slug
+        count += 1
+        slug = f"{base}-{count}"
+
+
 @router.post("", response_model=DerivadorResponse, status_code=201)
 def crear(body: DerivadorCreate, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
     radiologo = get_tenant(request)
-    derivador = Derivador(**body.model_dump(), radiologo_id=radiologo.id)
+    slug = _generar_portal_slug(body.nombre, radiologo.id, db)
+    derivador = Derivador(
+        **body.model_dump(),
+        radiologo_id=radiologo.id,
+        portal_token=str(uuid.uuid4()),
+        portal_slug=slug,
+    )
     db.add(derivador)
     db.commit()
     db.refresh(derivador)
@@ -82,6 +107,10 @@ def eliminar(id: int, request: Request, db: Session = Depends(get_db), _=Depends
     db.commit()
 
 
+def _portal_url(derivador: Derivador, radiologo_slug: str) -> str:
+    return f"https://{radiologo_slug}.{settings.BASE_DOMAIN}/portal/acceder/{derivador.portal_slug}?t={derivador.portal_token}"
+
+
 @router.post("/{id}/magic-link")
 def generar_magic_link(id: int, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
     radiologo = get_tenant(request)
@@ -89,12 +118,17 @@ def generar_magic_link(id: int, request: Request, db: Session = Depends(get_db),
     if not derivador:
         raise HTTPException(404, "Derivador no encontrado")
 
-    db.query(PortalMagicLink).filter(PortalMagicLink.derivador_id == id, PortalMagicLink.activo == True).update({"activo": False})
-
-    token = str(uuid.uuid4())
-    db.add(PortalMagicLink(derivador_id=id, token=token, expira_en=datetime.utcnow() + timedelta(hours=24)))
-    db.commit()
-
-    url = f"https://{radiologo.slug}.{settings.BASE_DOMAIN}/portal/acceder?token={token}"
+    url = _portal_url(derivador, radiologo.slug)
     ok, msg = enviar_magic_link_portal(derivador, url, radiologo_nombre=radiologo.nombre_display or "Radiología")
     return {"url": url, "email_enviado": ok, "mensaje": msg}
+
+
+@router.post("/{id}/regenerar-token")
+def regenerar_token(id: int, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    radiologo = get_tenant(request)
+    derivador = db.query(Derivador).filter(Derivador.id == id, Derivador.radiologo_id == radiologo.id, Derivador.activo == True).first()
+    if not derivador:
+        raise HTTPException(404, "Derivador no encontrado")
+    derivador.portal_token = str(uuid.uuid4())
+    db.commit()
+    return {"url": _portal_url(derivador, radiologo.slug)}

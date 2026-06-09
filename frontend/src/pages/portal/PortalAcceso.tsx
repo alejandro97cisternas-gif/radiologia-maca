@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams, useNavigate, useParams } from 'react-router-dom'
 import { Spin, Result, Button, Form, Input, Card, Typography, message } from 'antd'
 import { MailOutlined } from '@ant-design/icons'
 import { portalAcceder, portalSolicitarAcceso, portalTenantInfo } from '../../api/portal'
@@ -62,32 +62,34 @@ function FormSolicitarAcceso() {
 
 export default function PortalAcceso() {
   const [params] = useSearchParams()
+  const { slug } = useParams<{ slug?: string }>()
   const navigate = useNavigate()
   const [error, setError] = useState('')
   const called = useRef(false)
 
-  const token = params.get('token')
+  const t = params.get('t')
+  const hasToken = !!slug && !!t
 
   useEffect(() => {
-    if (!token) return
+    if (!hasToken) return
     if (called.current) return
     called.current = true
-    portalAcceder(token)
+    portalAcceder(slug!, t!)
       .then(res => {
         localStorage.setItem('portal_token', res.access_token)
         navigate('/portal/dashboard')
       })
-      .catch(() => setError('Enlace inválido o expirado'))
-  }, [token])
+      .catch(() => setError('Enlace inválido'))
+  }, [hasToken])
 
-  if (!token) return <FormSolicitarAcceso />
+  if (!hasToken) return <FormSolicitarAcceso />
 
   if (error) return (
     <Result
       status="error"
       title="Enlace inválido"
       subTitle={error}
-      extra={<Button onClick={() => navigate('/portal/acceder')}>Solicitar nuevo enlace</Button>}
+      extra={<Button onClick={() => navigate('/portal/acceder')}>Solicitar acceso por email</Button>}
     />
   )
 

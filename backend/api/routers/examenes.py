@@ -1,7 +1,7 @@
 import io
 import uuid
 import zipfile
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -15,25 +15,15 @@ from modulos.examenes.models import Examen, TipoExamenCustom
 from modulos.informes.models import Informe
 from modulos.incidencias.models import Incidencia
 from modulos.notificaciones.models import Notificacion
-from modulos.derivadores.models import Derivador, PortalMagicLink
+from modulos.derivadores.models import Derivador
 
 router = APIRouter(prefix="/api/examenes", tags=["examenes"])
 
 ESTADOS_VALIDOS = ["PENDIENTE", "EN_PROCESO", "COMPLETADO"]
 
 
-def _generar_magic_link(derivador_id: int, radiologo_slug: str, db: Session) -> str:
-    db.query(PortalMagicLink).filter(
-        PortalMagicLink.derivador_id == derivador_id, PortalMagicLink.activo == True
-    ).update({"activo": False})
-    token = str(uuid.uuid4())
-    db.add(PortalMagicLink(
-        derivador_id=derivador_id,
-        token=token,
-        expira_en=datetime.utcnow() + timedelta(hours=24),
-    ))
-    db.flush()
-    return f"https://{radiologo_slug}.{settings.BASE_DOMAIN}/portal/acceder?token={token}"
+def _generar_link_portal(derivador, radiologo_slug: str) -> str:
+    return f"https://{radiologo_slug}.{settings.BASE_DOMAIN}/portal/acceder/{derivador.portal_slug}?t={derivador.portal_token}"
 
 
 @router.get("/tipos")
@@ -231,7 +221,7 @@ def notificar_derivador(caso_id: str, request: Request, db: Session = Depends(ge
     if not all(e.informe is not None for e in examenes):
         raise HTTPException(400, "Faltan informes por subir")
 
-    link_portal = _generar_magic_link(examenes[0].derivador_id, radiologo.slug, db)
+    link_portal = _generar_link_portal(examenes[0].derivador, radiologo.slug)
     examenes_con_links = [
         {"tipo_examen": e.tipo_examen, "link_pdf": get_url(e.informe.ruta_pdf)}
         for e in examenes
