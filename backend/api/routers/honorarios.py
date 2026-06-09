@@ -14,7 +14,6 @@ from modulos.examenes.models import Examen, TipoExamenCustom
 from modulos.tarifas.models import TarifaDerivador
 from modulos.honorarios.models import Honorario
 from modulos.convenios.models import Convenio
-from modulos.informes.models import Informe
 
 _TIPOS_BASE: set[str] = set()  # sin tipos hardcodeados — todos son custom por radiologo
 
@@ -27,9 +26,9 @@ def _calcular_detalle(derivador_id: int, periodo: str, db: Session, radiologo_id
     fin = datetime(int(anio) + 1, 1, 1, tzinfo=timezone.utc) if int(mes) == 12 else datetime(int(anio), int(mes) + 1, 1, tzinfo=timezone.utc)
 
     examenes = (db.query(Examen)
-                .join(Informe, Informe.examen_id == Examen.id)
                 .filter(Examen.derivador_id == derivador_id,
-                        Examen.completado_en >= inicio, Examen.completado_en < fin).all())
+                        Examen.estado != "BORRADOR",
+                        Examen.creado_en >= inicio, Examen.creado_en < fin).all())
     tarifas = {t.tipo_examen.upper(): int(t.precio) for t in db.query(TarifaDerivador).filter(TarifaDerivador.derivador_id == derivador_id).all()}
 
     convenios = {
@@ -72,7 +71,7 @@ def _calcular_detalle(derivador_id: int, periodo: str, db: Session, radiologo_id
             total += precio
             detalle.append({
                 "examen_id": e.id, "paciente": e.paciente.nombre_completo,
-                "tipo_examen": e.tipo_examen, "fecha": e.completado_en.strftime("%Y-%m-%d"),
+                "tipo_examen": e.tipo_examen, "fecha": e.creado_en.strftime("%Y-%m-%d"),
                 "precio": precio, "precio_base": precio_base, "descuento": descuento,
                 "caso_id": e.caso_id,
             })
