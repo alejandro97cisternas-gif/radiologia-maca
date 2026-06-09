@@ -1,6 +1,7 @@
 import uuid
 import json
 import shutil
+import tempfile
 from datetime import date as DateType
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form, Query
@@ -13,7 +14,8 @@ from core.dependencies import get_portal_derivador
 from core.rut_utils import normalizar_rut, limpiar_rut
 from core.storage import (
     guardar_imagen_2d, guardar_dicom, guardar_preview_3d,
-    get_url, dimension, eliminar_carpeta_examen, STORAGE_ROOT,
+    guardar_desde_archivo, key_dicom, key_imagen_2d, key_preview_3d,
+    get_url, dimension, eliminar_carpeta_examen,
 )
 from core.dicom_utils import es_dicom
 from modulos.derivadores.models import Derivador
@@ -24,7 +26,8 @@ from modulos.tarifas.models import TarifaDerivador
 
 router = APIRouter(prefix="/api/portal", tags=["portal"])
 
-_CHUNK_DIR = STORAGE_ROOT / "_chunks"
+# /tmp es siempre escribible en Docker, independiente de permisos del volumen de datos
+_CHUNK_DIR = Path(tempfile.gettempdir()) / "maca_chunks"
 
 
 class IniciarSubidaBody(BaseModel):
@@ -425,7 +428,7 @@ async def subir_chunk(
 
 
 @router.post("/examenes/{examen_id}/imagenes/finalizar-subida", status_code=201)
-async def finalizar_subida_chunked(
+def finalizar_subida_chunked(
     examen_id: int,
     body: FinalizarSubidaBody,
     derivador: Derivador = Depends(get_portal_derivador),
@@ -439,25 +442,37 @@ async def finalizar_subida_chunked(
         raise HTTPException(403)
 
     total = meta["total_chunks"]
-    datos = b"".join(
-        (chunk_dir / f"chunk_{i}").read_bytes()
-        for i in range(total)
-        if (chunk_dir / f"chunk_{i}").exists()
-    )
-    if len([i for i in range(total) if (chunk_dir / f"chunk_{i}").exists()]) != total:
-        raise HTTPException(400, "Faltan chunks por subir")
-
     subtipo = meta["subtipo"]
     nombre = meta["nombre"]
 
-    if subtipo == "dicom" and not es_dicom(datos):
+    # Verificar todos los chunks antes de ensamblar
+    faltantes = [i for i in range(total) if not (chunk_dir / f"chunk_{i}").exists()]
+    if faltantes:
+        raise HTTPException(400, f"Faltan chunks: {faltantes}")
+
+    # Ensamblar en disco (sin cargar en RAM)
+    assembled = chunk_dir / "assembled"
+    try:
+        with open(assembled, "wb") as out:
+            for i in range(total):
+                out.write((chunk_dir / f"chunk_{i}").read_bytes())
+    except Exception as exc:
         shutil.rmtree(chunk_dir, ignore_errors=True)
-        raise HTTPException(400, "El archivo no es un DICOM válido")
+        raise HTTPException(500, f"Error ensamblando archivo: {exc}")
+
+    # Validar DICOM leyendo solo los primeros 132 bytes
+    if subtipo == "dicom":
+        with open(assembled, "rb") as f:
+            header = f.read(132)
+        if not es_dicom(header):
+            shutil.rmtree(chunk_dir, ignore_errors=True)
+            raise HTTPException(400, "El archivo no es un DICOM válido")
 
     examen = db.query(Examen).filter(
         Examen.id == examen_id, Examen.derivador_id == derivador.id
     ).first()
     if not examen:
+        shutil.rmtree(chunk_dir, ignore_errors=True)
         raise HTTPException(404)
 
     rut = examen.paciente.rut or f"pac{examen.paciente_id}"
@@ -468,20 +483,34 @@ async def finalizar_subida_chunked(
     dim = _resolver_dim(tipo, derivador.radiologo_id, db)
     if dim == "AMBOS":
         if dim_override not in ("2D", "3D"):
+            shutil.rmtree(chunk_dir, ignore_errors=True)
             raise HTTPException(400, "dim_override='2D' o '3D' requerido")
         dim = dim_override
 
     rid = derivador.radiologo_id
     did = derivador.id
+
+    # Calcular key y tipo DB
     if subtipo == "dicom":
-        path = guardar_dicom(rid, did, rut, examen_id, tipo, nombre, datos, ubicacion=ubicacion, dim=dim)
+        key = key_dicom(rid, did, rut, examen_id, tipo, nombre, ubicacion=ubicacion, dim=dim)
+        content_type = "application/dicom"
         db_tipo = "DICOM"
     elif subtipo == "preview":
-        path = guardar_preview_3d(rid, did, rut, examen_id, tipo, nombre, datos, dim=dim)
+        key = key_preview_3d(rid, did, rut, examen_id, tipo, nombre, dim=dim)
+        content_type = "image/png"
         db_tipo = "PREVIEW"
     else:
-        path = guardar_imagen_2d(rid, did, rut, examen_id, tipo, nombre, datos, dim=dim)
+        key = key_imagen_2d(rid, did, rut, examen_id, tipo, nombre, dim=dim)
+        ext = nombre.rsplit(".", 1)[-1].lower()
+        content_type = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}.get(ext, "application/octet-stream")
         db_tipo = "2D"
+
+    # Subir a storage en streaming (sin cargar en RAM)
+    try:
+        path = guardar_desde_archivo(key, assembled, content_type)
+    except Exception as exc:
+        shutil.rmtree(chunk_dir, ignore_errors=True)
+        raise HTTPException(500, f"Error subiendo a storage: {exc}")
 
     imagen = ImagenExamen(examen_id=examen_id, tipo=db_tipo, nombre_archivo=nombre, ruta=str(path))
     db.add(imagen)
