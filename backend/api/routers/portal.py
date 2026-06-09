@@ -1,4 +1,8 @@
+import uuid
+import json
+import shutil
 from datetime import date as DateType
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -6,10 +10,12 @@ from typing import Optional
 from core.database import get_db
 from core.security import crear_token
 from core.dependencies import get_portal_derivador
+from core.rut_utils import normalizar_rut, limpiar_rut
 from core.storage import (
     guardar_imagen_2d, guardar_dicom, guardar_preview_3d,
-    get_url, dimension, eliminar_carpeta_examen,
+    get_url, dimension, eliminar_carpeta_examen, STORAGE_ROOT,
 )
+from core.dicom_utils import es_dicom
 from modulos.derivadores.models import Derivador
 from modulos.incidencias.models import Incidencia
 from modulos.pacientes.models import Paciente
@@ -17,6 +23,20 @@ from modulos.examenes.models import Examen, ImagenExamen, RevisionExamen, TipoEx
 from modulos.tarifas.models import TarifaDerivador
 
 router = APIRouter(prefix="/api/portal", tags=["portal"])
+
+_CHUNK_DIR = STORAGE_ROOT / "_chunks"
+
+
+class IniciarSubidaBody(BaseModel):
+    nombre: str
+    total_chunks: int
+    subtipo: str
+    ubicacion: str = ""
+    dim_override: Optional[str] = None
+
+
+class FinalizarSubidaBody(BaseModel):
+    upload_id: str
 
 
 @router.get("/tenant-info")
@@ -108,10 +128,11 @@ def buscar_paciente(
     derivador: Derivador = Depends(get_portal_derivador),
     db: Session = Depends(get_db),
 ):
-    rut_norm = rut.strip().upper()
+    from sqlalchemy import func
+    rut_limpio = limpiar_rut(rut)
     paciente = db.query(Paciente).filter(
         Paciente.derivador_id == derivador.id,
-        Paciente.rut.ilike(rut_norm),
+        func.regexp_replace(Paciente.rut, r'[.\-\s]', '', 'g') == rut_limpio,
     ).first()
     if not paciente:
         return None
@@ -140,7 +161,7 @@ def crear_paciente(body: PacienteCreate, derivador: Derivador = Depends(get_port
         radiologo_id=derivador.radiologo_id,
         derivador_id=derivador.id,
         nombre_completo=body.nombre_completo,
-        rut=body.rut.strip().upper() if body.rut else None,
+        rut=normalizar_rut(body.rut) if body.rut else None,
         fecha_nacimiento=fecha,
     )
     db.add(paciente)
@@ -309,6 +330,10 @@ async def subir_imagen(
         raise HTTPException(400, "No se puede modificar un examen completado")
 
     datos = await archivo.read()
+
+    if subtipo == "dicom" and not es_dicom(datos):
+        raise HTTPException(400, "El archivo no es un DICOM válido")
+
     rut = examen.paciente.rut or f"pac{examen.paciente_id}"
     tipo = examen.tipo_examen
 
@@ -319,14 +344,15 @@ async def subir_imagen(
         dim = dim_override
 
     rid = derivador.radiologo_id
+    did = derivador.id
     if subtipo == "dicom":
-        path = guardar_dicom(rid, rut, examen_id, tipo, archivo.filename, datos, ubicacion=ubicacion, dim=dim)
+        path = guardar_dicom(rid, did, rut, examen_id, tipo, archivo.filename, datos, ubicacion=ubicacion, dim=dim)
         db_tipo = "DICOM"
     elif subtipo == "preview":
-        path = guardar_preview_3d(rid, rut, examen_id, tipo, archivo.filename, datos, dim=dim)
+        path = guardar_preview_3d(rid, did, rut, examen_id, tipo, archivo.filename, datos, dim=dim)
         db_tipo = "PREVIEW"
     else:
-        path = guardar_imagen_2d(rid, rut, examen_id, tipo, archivo.filename, datos, dim=dim)
+        path = guardar_imagen_2d(rid, did, rut, examen_id, tipo, archivo.filename, datos, dim=dim)
         db_tipo = "2D"
 
     imagen = ImagenExamen(
@@ -345,6 +371,125 @@ async def subir_imagen(
         "subtipo": subtipo,
         "url": get_url(path),
     }
+
+
+# ── Upload chunkeado ──────────────────────────────────────────────────────────
+
+@router.post("/examenes/{examen_id}/imagenes/iniciar-subida", status_code=201)
+async def iniciar_subida_chunked(
+    examen_id: int,
+    body: IniciarSubidaBody,
+    derivador: Derivador = Depends(get_portal_derivador),
+    db: Session = Depends(get_db),
+):
+    examen = db.query(Examen).filter(
+        Examen.id == examen_id, Examen.derivador_id == derivador.id
+    ).first()
+    if not examen:
+        raise HTTPException(404, "Examen no encontrado")
+    if examen.estado == "COMPLETADO":
+        raise HTTPException(400, "No se puede modificar un examen completado")
+
+    upload_id = str(uuid.uuid4())
+    chunk_dir = _CHUNK_DIR / upload_id
+    chunk_dir.mkdir(parents=True, exist_ok=True)
+    meta = {
+        "nombre": body.nombre,
+        "total_chunks": body.total_chunks,
+        "subtipo": body.subtipo,
+        "ubicacion": body.ubicacion,
+        "dim_override": body.dim_override,
+        "examen_id": examen_id,
+        "derivador_id": derivador.id,
+    }
+    (chunk_dir / "meta.json").write_text(json.dumps(meta))
+    return {"upload_id": upload_id}
+
+
+@router.post("/examenes/{examen_id}/imagenes/chunk")
+async def subir_chunk(
+    examen_id: int,
+    upload_id: str = Form(...),
+    chunk_index: int = Form(...),
+    chunk_data: UploadFile = File(...),
+    derivador: Derivador = Depends(get_portal_derivador),
+):
+    chunk_dir = _CHUNK_DIR / upload_id
+    if not chunk_dir.exists():
+        raise HTTPException(404, "upload_id inválido")
+    meta = json.loads((chunk_dir / "meta.json").read_text())
+    if meta["examen_id"] != examen_id or meta["derivador_id"] != derivador.id:
+        raise HTTPException(403)
+    (chunk_dir / f"chunk_{chunk_index}").write_bytes(await chunk_data.read())
+    return {"recibido": chunk_index}
+
+
+@router.post("/examenes/{examen_id}/imagenes/finalizar-subida", status_code=201)
+async def finalizar_subida_chunked(
+    examen_id: int,
+    body: FinalizarSubidaBody,
+    derivador: Derivador = Depends(get_portal_derivador),
+    db: Session = Depends(get_db),
+):
+    chunk_dir = _CHUNK_DIR / body.upload_id
+    if not chunk_dir.exists():
+        raise HTTPException(404, "upload_id inválido")
+    meta = json.loads((chunk_dir / "meta.json").read_text())
+    if meta["examen_id"] != examen_id or meta["derivador_id"] != derivador.id:
+        raise HTTPException(403)
+
+    total = meta["total_chunks"]
+    datos = b"".join(
+        (chunk_dir / f"chunk_{i}").read_bytes()
+        for i in range(total)
+        if (chunk_dir / f"chunk_{i}").exists()
+    )
+    if len([i for i in range(total) if (chunk_dir / f"chunk_{i}").exists()]) != total:
+        raise HTTPException(400, "Faltan chunks por subir")
+
+    subtipo = meta["subtipo"]
+    nombre = meta["nombre"]
+
+    if subtipo == "dicom" and not es_dicom(datos):
+        shutil.rmtree(chunk_dir, ignore_errors=True)
+        raise HTTPException(400, "El archivo no es un DICOM válido")
+
+    examen = db.query(Examen).filter(
+        Examen.id == examen_id, Examen.derivador_id == derivador.id
+    ).first()
+    if not examen:
+        raise HTTPException(404)
+
+    rut = examen.paciente.rut or f"pac{examen.paciente_id}"
+    tipo = examen.tipo_examen
+    ubicacion = meta["ubicacion"]
+    dim_override = meta["dim_override"]
+
+    dim = _resolver_dim(tipo, derivador.radiologo_id, db)
+    if dim == "AMBOS":
+        if dim_override not in ("2D", "3D"):
+            raise HTTPException(400, "dim_override='2D' o '3D' requerido")
+        dim = dim_override
+
+    rid = derivador.radiologo_id
+    did = derivador.id
+    if subtipo == "dicom":
+        path = guardar_dicom(rid, did, rut, examen_id, tipo, nombre, datos, ubicacion=ubicacion, dim=dim)
+        db_tipo = "DICOM"
+    elif subtipo == "preview":
+        path = guardar_preview_3d(rid, did, rut, examen_id, tipo, nombre, datos, dim=dim)
+        db_tipo = "PREVIEW"
+    else:
+        path = guardar_imagen_2d(rid, did, rut, examen_id, tipo, nombre, datos, dim=dim)
+        db_tipo = "2D"
+
+    imagen = ImagenExamen(examen_id=examen_id, tipo=db_tipo, nombre_archivo=nombre, ruta=str(path))
+    db.add(imagen)
+    db.commit()
+    db.refresh(imagen)
+    shutil.rmtree(chunk_dir, ignore_errors=True)
+
+    return {"id": imagen.id, "nombre": nombre, "subtipo": subtipo, "url": get_url(path)}
 
 
 @router.get("/examenes/{examen_id}/imagenes")
@@ -477,7 +622,7 @@ def eliminar_examen(
         raise HTTPException(400, "No se puede eliminar un examen con informe completado")
 
     rut = examen.paciente.rut or f"pac{examen.paciente_id}"
-    eliminar_carpeta_examen(derivador.radiologo_id, rut, examen_id)
+    eliminar_carpeta_examen(derivador.radiologo_id, derivador.id, rut, examen_id)
     db.delete(examen)
     db.commit()
 

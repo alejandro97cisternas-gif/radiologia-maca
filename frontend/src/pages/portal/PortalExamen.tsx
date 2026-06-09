@@ -11,9 +11,10 @@ import {
 } from '@ant-design/icons'
 import {
   portalGetExamen, portalGetImagenes, portalGetRevisiones,
-  portalSubirImagen, portalEliminarImagen,
+  portalSubirImagen, portalSubirEnChunks, portalEliminarImagen,
   portalConfirmarEdicion, portalGuardarNota,
 } from '../../api/portal'
+import { readDropItems, filterDicomFromFiles } from '../../utils/dicomUpload'
 import { portalGetIncidencia, portalResolverIncidencia } from '../../api/incidencias'
 import type { Incidencia } from '../../api/incidencias'
 import { message } from 'antd'
@@ -115,6 +116,7 @@ export default function PortalExamen() {
 
   const fileInput2dRef = useRef<HTMLInputElement>(null)
   const fileInputDicomRef = useRef<HTMLInputElement>(null)
+  const fileInputDicomFolderRef = useRef<HTMLInputElement>(null)
   const fileInputPreviewRef = useRef<HTMLInputElement>(null)
 
   const cargar = async () => {
@@ -148,23 +150,45 @@ export default function PortalExamen() {
     }
   }
 
-  const handleUpload = async (file: File, subtipo: 'imagen' | 'dicom' | 'preview') => {
+  const handleUpload = async (files: File | File[], subtipo: 'imagen' | 'dicom' | 'preview') => {
+    const lista = Array.isArray(files) ? files : [files]
+    const dim = examen?.dimension
+    const dimOverride: '2D' | '3D' | undefined = dim === 'AMBOS' ? (subtipo === 'imagen' ? '2D' : '3D') : undefined
     setUploading(true)
-    setUploadProgress(0)
-    try {
-      const dim = examen?.dimension
-      let dimOverride: '2D' | '3D' | undefined
-      if (dim === 'AMBOS') dimOverride = subtipo === 'imagen' ? '2D' : '3D'
-      await portalSubirImagen(examenId, subtipo, file, setUploadProgress, '', dimOverride)
-      setHasChanges(true)
-      message.success(`"${file.name}" subida`)
-      cargar()
-    } catch {
-      message.error('Error al subir imagen')
-    } finally {
-      setUploading(false)
+    for (const file of lista) {
       setUploadProgress(0)
+      try {
+        if (subtipo === 'dicom') {
+          await portalSubirEnChunks(examenId, file, subtipo, setUploadProgress, '', dimOverride)
+        } else {
+          await portalSubirImagen(examenId, subtipo, file, setUploadProgress, '', dimOverride)
+        }
+        setHasChanges(true)
+        message.success(`"${file.name}" subida`)
+      } catch {
+        message.error(`Error al subir "${file.name}"`)
+      }
     }
+    setUploading(false)
+    setUploadProgress(0)
+    cargar()
+  }
+
+  const handleDicomFolderDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    if (!editMode) return
+    const all = await readDropItems(e.dataTransfer.items)
+    const { dicom, skipped } = await filterDicomFromFiles(all)
+    if (skipped > 0) message.info(`${skipped} archivo${skipped !== 1 ? 's' : ''} omitido${skipped !== 1 ? 's' : ''} (no son DICOM)`)
+    if (dicom.length) handleUpload(dicom, 'dicom')
+  }
+
+  const handleDicomFolderInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.length) return
+    const { dicom, skipped } = await filterDicomFromFiles(Array.from(e.target.files))
+    if (skipped > 0) message.info(`${skipped} archivo${skipped !== 1 ? 's' : ''} omitido${skipped !== 1 ? 's' : ''} (no son DICOM)`)
+    if (dicom.length) handleUpload(dicom, 'dicom')
+    e.target.value = ''
   }
 
   const handleConfirmar = async () => {
@@ -348,8 +372,10 @@ export default function PortalExamen() {
       {/* Inputs ocultos */}
       <input ref={fileInput2dRef} type="file" accept="image/*" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f, 'imagen'); e.target.value = '' }} />
-      <input ref={fileInputDicomRef} type="file" accept=".dcm,.dicom" style={{ display: 'none' }}
-        onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f, 'dicom'); e.target.value = '' }} />
+      <input ref={fileInputDicomRef} type="file" multiple style={{ display: 'none' }}
+        onChange={e => { if (e.target.files?.length) handleUpload(Array.from(e.target.files), 'dicom'); e.target.value = '' }} />
+      <input ref={fileInputDicomFolderRef} type="file" multiple style={{ display: 'none' }}
+        onChange={handleDicomFolderInput} />
       <input ref={fileInputPreviewRef} type="file" accept="image/*" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f, 'preview'); e.target.value = '' }} />
 
@@ -439,9 +465,33 @@ export default function PortalExamen() {
               }
               {editMode && (
                 <>
-                  <Button icon={<UploadOutlined />} loading={uploading} onClick={() => fileInputDicomRef.current?.click()}>
-                    Agregar DICOM
-                  </Button>
+                  <div
+                    onDrop={handleDicomFolderDrop}
+                    onDragOver={e => e.preventDefault()}
+                    style={{
+                      border: '2px dashed #d1d5db', borderRadius: 8, padding: '12px 16px',
+                      textAlign: 'center', background: '#fafafa', marginBottom: 8,
+                      color: '#6b7280', fontSize: 12,
+                    }}
+                  >
+                    Arrastra archivos o carpeta DICOM aquí
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <Button icon={<UploadOutlined />} loading={uploading} onClick={() => fileInputDicomRef.current?.click()}>
+                      Agregar DICOM
+                    </Button>
+                    <Button
+                      loading={uploading}
+                      onClick={() => {
+                        if (fileInputDicomFolderRef.current) {
+                          fileInputDicomFolderRef.current.setAttribute('webkitdirectory', '')
+                          fileInputDicomFolderRef.current.click()
+                        }
+                      }}
+                    >
+                      Seleccionar carpeta
+                    </Button>
+                  </div>
                   {uploading && uploadProgress > 0 && (
                     <Progress percent={uploadProgress} size="small" style={{ marginTop: 8, maxWidth: 300 }} />
                   )}

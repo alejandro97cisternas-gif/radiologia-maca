@@ -23,9 +23,9 @@ def dimension(tipo_examen: str) -> str:
     return "3D" if tipo_examen in EXAMENES_3D else "2D"
 
 
-def _key_base(radiologo_id: int, rut: str, orden_id: int, tipo_examen: str, dim: str | None = None) -> str:
+def _key_base(radiologo_id: int, derivador_id: int, rut: str, orden_id: int, tipo_examen: str, dim: str | None = None) -> str:
     d = dim or dimension(tipo_examen)
-    return f"{radiologo_id}/{rut}/ordenes/{orden_id}/{d}/{tipo_examen}"
+    return f"{radiologo_id}/{derivador_id}/{rut}/ordenes/{orden_id}/{d}/{tipo_examen}"
 
 
 # ── Backend R2 ────────────────────────────────────────────────────────────────
@@ -99,9 +99,9 @@ def _mime(nombre: str) -> str:
             "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}.get(ext, "application/octet-stream")
 
 
-def guardar_imagen_2d(radiologo_id: int, rut: str, orden_id: int, tipo_examen: str,
+def guardar_imagen_2d(radiologo_id: int, derivador_id: int, rut: str, orden_id: int, tipo_examen: str,
                       nombre: str, datos: bytes, dim: str | None = None) -> str:
-    key = f"{_key_base(radiologo_id, rut, orden_id, tipo_examen, dim)}/imagen/{nombre}"
+    key = f"{_key_base(radiologo_id, derivador_id, rut, orden_id, tipo_examen, dim)}/imagen/{nombre}"
     if _is_r2():
         _r2_upload(key, datos, _mime(nombre))
     else:
@@ -109,10 +109,10 @@ def guardar_imagen_2d(radiologo_id: int, rut: str, orden_id: int, tipo_examen: s
     return key
 
 
-def guardar_dicom(radiologo_id: int, rut: str, orden_id: int, tipo_examen: str,
+def guardar_dicom(radiologo_id: int, derivador_id: int, rut: str, orden_id: int, tipo_examen: str,
                   nombre: str, datos: bytes, ubicacion: str = "", dim: str | None = None) -> str:
     sub = f"dicom/{ubicacion}/{nombre}" if ubicacion else f"dicom/{nombre}"
-    key = f"{_key_base(radiologo_id, rut, orden_id, tipo_examen, dim)}/imagen/{sub}"
+    key = f"{_key_base(radiologo_id, derivador_id, rut, orden_id, tipo_examen, dim)}/imagen/{sub}"
     if _is_r2():
         _r2_upload(key, datos, "application/dicom")
     else:
@@ -120,9 +120,9 @@ def guardar_dicom(radiologo_id: int, rut: str, orden_id: int, tipo_examen: str,
     return key
 
 
-def guardar_preview_3d(radiologo_id: int, rut: str, orden_id: int, tipo_examen: str,
+def guardar_preview_3d(radiologo_id: int, derivador_id: int, rut: str, orden_id: int, tipo_examen: str,
                        nombre: str, datos: bytes, dim: str | None = None) -> str:
-    key = f"{_key_base(radiologo_id, rut, orden_id, tipo_examen, dim)}/imagen/preview/{nombre}"
+    key = f"{_key_base(radiologo_id, derivador_id, rut, orden_id, tipo_examen, dim)}/imagen/preview/{nombre}"
     if _is_r2():
         _r2_upload(key, datos, _mime(nombre))
     else:
@@ -130,10 +130,10 @@ def guardar_preview_3d(radiologo_id: int, rut: str, orden_id: int, tipo_examen: 
     return key
 
 
-def guardar_informe_pdf(radiologo_id: int, rut: str, orden_id: int, tipo_examen: str,
+def guardar_informe_pdf(radiologo_id: int, derivador_id: int, rut: str, orden_id: int, tipo_examen: str,
                         nombre: str, datos: bytes, dim: str | None = None) -> str:
     d = dim or dimension(tipo_examen)
-    key = f"{radiologo_id}/{rut}/ordenes/{orden_id}/{d}/{tipo_examen}/informe/{nombre}"
+    key = f"{radiologo_id}/{derivador_id}/{rut}/ordenes/{orden_id}/{d}/{tipo_examen}/informe/{nombre}"
     if _is_r2():
         _r2_upload(key, datos, "application/pdf")
     else:
@@ -141,10 +141,10 @@ def guardar_informe_pdf(radiologo_id: int, rut: str, orden_id: int, tipo_examen:
     return key
 
 
-def listar_archivos_examen(radiologo_id: int, rut: str, orden_id: int,
+def listar_archivos_examen(radiologo_id: int, derivador_id: int, rut: str, orden_id: int,
                            tipo_examen: str, dim: str | None = None) -> list[dict]:
     d = dim or dimension(tipo_examen)
-    prefix = f"{_key_base(radiologo_id, rut, orden_id, tipo_examen, d)}/imagen"
+    prefix = f"{_key_base(radiologo_id, derivador_id, rut, orden_id, tipo_examen, d)}/imagen"
     keys = _r2_list_prefix(prefix) if _is_r2() else _local_list_prefix(prefix)
 
     result = []
@@ -160,8 +160,8 @@ def listar_archivos_examen(radiologo_id: int, rut: str, orden_id: int,
     return result
 
 
-def eliminar_carpeta_examen(radiologo_id: int, rut: str, examen_id: int) -> None:
-    prefix = f"{radiologo_id}/{rut}/ordenes/{examen_id}"
+def eliminar_carpeta_examen(radiologo_id: int, derivador_id: int, rut: str, examen_id: int) -> None:
+    prefix = f"{radiologo_id}/{derivador_id}/{rut}/ordenes/{examen_id}"
     if _is_r2():
         _r2_delete_prefix(prefix)
     else:

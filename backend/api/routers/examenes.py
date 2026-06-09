@@ -129,7 +129,7 @@ async def subir_informe(
 
     datos = await archivo.read()
     rut = examen.paciente.rut or f"pac{examen.paciente_id}"
-    path = guardar_informe_pdf(radiologo.id, rut, examen_id, examen.tipo_examen, archivo.filename, datos)
+    path = guardar_informe_pdf(radiologo.id, examen.derivador_id or 0, rut, examen_id, examen.tipo_examen, archivo.filename, datos)
 
     informe = db.query(Informe).filter(Informe.examen_id == examen_id).first()
     if informe:

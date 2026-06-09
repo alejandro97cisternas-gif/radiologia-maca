@@ -10,10 +10,12 @@ import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import {
   portalBuscarPaciente, portalCrearPaciente, portalCrearExamen,
-  portalSubirImagen, portalConfirmarTareas, portalNotificarCaso,
+  portalSubirImagen, portalSubirEnChunks, portalConfirmarTareas, portalNotificarCaso,
   portalGetTipos,
 } from '../../api/portal'
+import { readDropItems, filterDicomFromFiles } from '../../utils/dicomUpload'
 import NovexBadge from '../../components/NovexBadge'
+import { normalizarRut } from '../../utils/rut'
 
 interface TipoExamen { nombre: string; dimension: '2D' | '3D' | 'AMBOS'; categoria?: string; custom: boolean }
 
@@ -46,28 +48,77 @@ const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 // ── Drop zone reutilizable ────────────────────────────────────────────────────
 
 function DropZone({
-  label, accept, onFiles,
+  label, accept, onFiles, folderScan = false,
 }: {
   label: string
   accept: string
   onFiles: (files: File[]) => void
+  folderScan?: boolean
 }) {
+  const mainRef = useRef<HTMLInputElement>(null)
+  const folderRef = useRef<HTMLInputElement>(null)
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    if (folderScan && e.dataTransfer.items?.length > 0) {
+      const all = await readDropItems(e.dataTransfer.items)
+      const { dicom, skipped } = await filterDicomFromFiles(all)
+      if (skipped > 0) message.info(`${skipped} archivo${skipped !== 1 ? 's' : ''} omitido${skipped !== 1 ? 's' : ''} (no son DICOM)`)
+      if (dicom.length) onFiles(dicom)
+    } else {
+      onFiles(Array.from(e.dataTransfer.files))
+    }
+  }
+
+  const handleFolderChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.length) return
+    const { dicom, skipped } = await filterDicomFromFiles(Array.from(e.target.files))
+    if (skipped > 0) message.info(`${skipped} archivo${skipped !== 1 ? 's' : ''} omitido${skipped !== 1 ? 's' : ''} (no son DICOM)`)
+    if (dicom.length) onFiles(dicom)
+    e.target.value = ''
+  }
+
   return (
     <div
-      onDrop={e => { e.preventDefault(); onFiles(Array.from(e.dataTransfer.files)) }}
+      onDrop={handleDrop}
       onDragOver={e => e.preventDefault()}
+      onClick={() => mainRef.current?.click()}
       style={{
         border: '2px dashed #d1d5db', borderRadius: 8, padding: '14px',
-        textAlign: 'center', cursor: 'pointer', background: '#fafafa', position: 'relative',
+        textAlign: 'center', cursor: 'pointer', background: '#fafafa',
       }}
     >
       <input
+        ref={mainRef}
         type="file" multiple accept={accept}
-        style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-        onChange={e => { if (e.target.files?.length) onFiles(Array.from(e.target.files)) }}
+        style={{ display: 'none' }}
+        onChange={e => { if (e.target.files?.length) onFiles(Array.from(e.target.files)); e.target.value = '' }}
       />
       <InboxOutlined style={{ fontSize: 22, color: '#9ca3af' }} />
       <div style={{ fontSize: 12, color: '#6b7280', marginTop: 3 }}>{label}</div>
+      {folderScan && (
+        <>
+          <input
+            ref={folderRef}
+            type="file"
+            multiple
+            style={{ display: 'none' }}
+            onChange={handleFolderChange}
+          />
+          <span
+            style={{ fontSize: 11, color: '#3b82f6', marginTop: 4, display: 'inline-block' }}
+            onClick={e => {
+              e.stopPropagation()
+              if (folderRef.current) {
+                folderRef.current.setAttribute('webkitdirectory', '')
+                folderRef.current.click()
+              }
+            }}
+          >
+            o seleccionar carpeta completa
+          </span>
+        </>
+      )}
     </div>
   )
 }
@@ -159,20 +210,23 @@ function CardExamen({
         })
 
       patch({ estado: 'subiendo' })
+      const dimArg = dim === 'AMBOS' ? dimFolder : undefined
       try {
-        await portalSubirImagen(
-          card.examen_id!, item.subtipo, item.file,
-          pct => patch({ progreso: pct }),
-          item.ubicacion,
-          dim === 'AMBOS' ? dimFolder : undefined,
-        )
+        if (item.subtipo === 'dicom') {
+          await portalSubirEnChunks(card.examen_id!, item.file, item.subtipo, pct => patch({ progreso: pct }), item.ubicacion, dimArg)
+        } else {
+          await portalSubirImagen(card.examen_id!, item.subtipo, item.file, pct => patch({ progreso: pct }), item.ubicacion, dimArg)
+        }
         patch({ estado: 'ok', progreso: 100 })
-        // Replicar al resto de exámenes si está activo
         if (replicar) {
           for (const otro of otrosExamenes) {
             if (otro.uid !== card.uid && otro.examen_id) {
               try {
-                await portalSubirImagen(otro.examen_id, item.subtipo, item.file, undefined, item.ubicacion, dim === 'AMBOS' ? dimFolder : undefined)
+                if (item.subtipo === 'dicom') {
+                  await portalSubirEnChunks(otro.examen_id, item.file, item.subtipo, undefined, item.ubicacion, dimArg)
+                } else {
+                  await portalSubirImagen(otro.examen_id, item.subtipo, item.file, undefined, item.ubicacion, dimArg)
+                }
               } catch { /* silent */ }
             }
           }
@@ -256,7 +310,7 @@ function CardExamen({
             <Typography.Text strong style={{ fontSize: 12, color: '#7c3aed', display: 'block', marginBottom: 6 }}>
               🧊 DICOM (.dcm)
             </Typography.Text>
-            <DropZone accept=".dcm" label="Arrastra archivos .dcm" onFiles={files => subirArchivos(files, 'dicom')} />
+            <DropZone accept=".dcm,.dicom" label="Arrastra archivos .dcm o carpeta" onFiles={files => subirArchivos(files, 'dicom')} folderScan />
             <ListaArchivos archivos={card.archivos.filter(a => a.subtipo === 'dicom')} />
           </div>
           <div>
@@ -278,7 +332,7 @@ function CardExamen({
                 <Typography.Text strong style={{ fontSize: 12, textTransform: 'capitalize', display: 'block', marginBottom: 6 }}>
                   {ub === 'superior' ? '⬆ Superior' : '⬇ Inferior'}
                 </Typography.Text>
-                <DropZone accept=".dcm" label={`Carpeta ${ub}`} onFiles={files => subirArchivos(files, 'dicom', ub)} />
+                <DropZone accept=".dcm,.dicom" label={`DICOM ${ub} o carpeta`} onFiles={files => subirArchivos(files, 'dicom', ub)} folderScan />
                 <ListaArchivos archivos={card.archivos.filter(a => a.ubicacion === ub)} />
               </div>
             ))}
@@ -305,7 +359,7 @@ function CardExamen({
             <Typography.Text strong style={{ fontSize: 12, color: '#7c3aed', display: 'block', marginBottom: 6 }}>
               🧊 3D — DICOM
             </Typography.Text>
-            <DropZone accept=".dcm" label="Arrastra archivos .dcm" onFiles={files => subirArchivos(files, 'dicom', '', '3D')} />
+            <DropZone accept=".dcm,.dicom" label="Arrastra archivos .dcm o carpeta" onFiles={files => subirArchivos(files, 'dicom', '', '3D')} folderScan />
             <ListaArchivos archivos={card.archivos.filter(a => a.dimFolder === '3D' && a.subtipo === 'dicom')} />
             <div style={{ marginTop: 8 }}>
               <Typography.Text strong style={{ fontSize: 12, color: '#059669', display: 'block', marginBottom: 6 }}>
@@ -382,15 +436,23 @@ export default function PortalNuevoPaciente() {
   const onRutChange = (rut: string) => {
     setSugerencia(null)
     if (rutTimeout.current) clearTimeout(rutTimeout.current)
-    if (rut.length < 5) return
+    const clean = rut.replace(/[.\-\s]/g, '')
+    if (clean.length < 7) return
     rutTimeout.current = setTimeout(async () => {
       setBuscandoRut(true)
       try {
-        const res = await portalBuscarPaciente(rut)
+        const res = await portalBuscarPaciente(normalizarRut(rut))
         if (res) setSugerencia(res)
       } catch { /* silencioso */ }
       finally { setBuscandoRut(false) }
     }, 500)
+  }
+
+  const onRutBlur = () => {
+    const val = formPaciente.getFieldValue('rut')
+    if (val && val.replace(/[.\-\s]/g, '').length >= 7) {
+      formPaciente.setFieldValue('rut', normalizarRut(val))
+    }
   }
 
   const usarExistente = () => {
@@ -475,6 +537,7 @@ export default function PortalNuevoPaciente() {
                   id="campo-rut"
                   placeholder="12.345.678-9"
                   onChange={e => onRutChange(e.target.value)}
+                  onBlur={onRutBlur}
                   suffix={buscandoRut ? <Spin size="small" /> : null}
                 />
               </Form.Item>

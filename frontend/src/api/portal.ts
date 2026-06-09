@@ -55,6 +55,52 @@ export const portalSubirImagen = (
   }).then(r => r.data)
 }
 
+// ── Upload chunkeado (para archivos DICOM grandes) ────────────────────────────
+
+const CHUNK_SIZE = 2 * 1024 * 1024 // 2 MB
+
+const portalIniciarSubida = (
+  examenId: number,
+  body: { nombre: string; total_chunks: number; subtipo: string; ubicacion?: string; dim_override?: string },
+) => portalApi.post(`/api/portal/examenes/${examenId}/imagenes/iniciar-subida`, body).then(r => r.data as { upload_id: string })
+
+const portalSubirChunk = (examenId: number, uploadId: string, chunkIndex: number, chunk: Blob) => {
+  const form = new FormData()
+  form.append('upload_id', uploadId)
+  form.append('chunk_index', String(chunkIndex))
+  form.append('chunk_data', chunk, 'chunk')
+  return portalApi.post(`/api/portal/examenes/${examenId}/imagenes/chunk`, form).then(r => r.data)
+}
+
+const portalFinalizarSubida = (examenId: number, uploadId: string) =>
+  portalApi.post(`/api/portal/examenes/${examenId}/imagenes/finalizar-subida`, { upload_id: uploadId }).then(r => r.data)
+
+export const portalSubirEnChunks = async (
+  examenId: number,
+  file: File,
+  subtipo: 'dicom' | 'preview' | 'imagen',
+  onProgress?: (pct: number) => void,
+  ubicacion = '',
+  dimOverride?: '2D' | '3D',
+) => {
+  const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE))
+  const { upload_id } = await portalIniciarSubida(examenId, {
+    nombre: file.name,
+    total_chunks: totalChunks,
+    subtipo,
+    ubicacion,
+    dim_override: dimOverride,
+  })
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE
+    await portalSubirChunk(examenId, upload_id, i, file.slice(start, start + CHUNK_SIZE))
+    onProgress?.(Math.round(((i + 1) / totalChunks) * 90))
+  }
+  const result = await portalFinalizarSubida(examenId, upload_id)
+  onProgress?.(100)
+  return result
+}
+
 export const portalGetImagenes = (examenId: number) =>
   portalApi.get(`/api/portal/examenes/${examenId}/imagenes`).then(r => r.data)
 
