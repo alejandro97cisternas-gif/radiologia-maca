@@ -207,7 +207,7 @@ function CardExamen({
   pacienteId: number
   casoId: string
   puedeEliminar: boolean
-  onChange: (uid: string, update: Partial<ExamenCard>) => void
+  onChange: (uid: string, update: Partial<ExamenCard> | ((c: ExamenCard) => Partial<ExamenCard>)) => void
   onDelete: (uid: string) => void
   tipos: TipoExamen[]
   tiposMap: Map<string, '2D' | '3D' | 'AMBOS'>
@@ -256,9 +256,9 @@ function CardExamen({
 
     for (const item of nuevos) {
       const patch = (p: Partial<ArchivoSubida>) =>
-        onChange(card.uid, {
-          archivos: [...card.archivos, ...nuevos].map(a => a.id === item.id ? { ...a, ...p } : a),
-        })
+        onChange(card.uid, c => ({
+          archivos: c.archivos.map(a => a.id === item.id ? { ...a, ...p } : a),
+        }))
 
       patch({ estado: 'subiendo', startedAt: Date.now() })
       const dimArg = dim === 'AMBOS' ? dimFolder : undefined
@@ -458,8 +458,12 @@ export default function PortalNuevoPaciente() {
 
   // ── Helpers exámenes ──────────────────────────────────────────────────────
 
-  const updateCard = useCallback((uid: string, update: Partial<ExamenCard>) => {
-    setExamenes(prev => prev.map(c => c.uid === uid ? { ...c, ...update } : c))
+  const updateCard = useCallback((uid: string, update: Partial<ExamenCard> | ((c: ExamenCard) => Partial<ExamenCard>)) => {
+    setExamenes(prev => prev.map(c => {
+      if (c.uid !== uid) return c
+      const partial = typeof update === 'function' ? update(c) : update
+      return { ...c, ...partial }
+    }))
   }, [])
 
   const deleteCard = useCallback((uid: string) => {
