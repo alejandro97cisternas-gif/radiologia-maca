@@ -19,7 +19,7 @@ import { portalMe, portalGetExamenes, portalEliminarExamen, portalGetNotificacio
 import NovexBadge from '../../components/NovexBadge'
 import type { NotificacionPortal } from '../../api/portal'
 
-const { Sider, Content, Header } = Layout
+const { Sider, Content, Header, Footer } = Layout
 
 type Vista = 'board' | 'tabla' | 'calendario'
 
@@ -312,20 +312,19 @@ export default function PortalDashboard() {
   return (
     <>
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider width={200} style={{ background: '#1e3a5f', display: 'flex', flexDirection: 'column' }}>
+      <Sider width={200} style={{ background: '#1e3a5f' }}>
         <div id="portal-titulo" style={{ padding: '20px 16px', color: '#fff', fontWeight: 700, fontSize: 14 }}>
           Portal Clínica
         </div>
         <Menu
           theme="dark"
           defaultSelectedKeys={['dashboard']}
-          style={{ background: '#1e3a5f', border: 'none', flex: 1 }}
+          style={{ background: '#1e3a5f', border: 'none' }}
           items={[
             { key: 'dashboard', label: 'Mis exámenes', onClick: () => navigate('/portal/dashboard') },
             { key: 'tarifas', icon: <DollarOutlined />, label: <span id="portal-tarifas-link">Tarifas</span>, onClick: () => navigate('/portal/tarifas') },
           ]}
         />
-        <NovexBadge dark />
       </Sider>
 
       <Layout style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -396,6 +395,7 @@ export default function PortalDashboard() {
           )}
 
         </Content>
+        <Footer style={{ padding: 0, background: '#fff' }}><NovexBadge /></Footer>
         <PanelIncidencias
           examenes={examenes.map((e: any) => ({
             id: e.id,

@@ -443,7 +443,8 @@ export default function PortalNuevoPaciente() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f0f4f8', padding: '24px 0' }}>
+    <div style={{ minHeight: '100vh', background: '#f0f4f8', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ flex: 1, padding: '24px 0' }}>
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px' }}>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -621,8 +622,9 @@ export default function PortalNuevoPaciente() {
             </Button>
           </Card>
         )}
-      <NovexBadge style={{ marginTop: 32 }} />
       </div>
+    </div>
+    <NovexBadge />
     </div>
   )
 }

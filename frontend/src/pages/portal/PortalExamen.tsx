@@ -225,7 +225,8 @@ export default function PortalExamen() {
   )
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f0f4f8', padding: 24 }}>
+    <div style={{ minHeight: '100vh', background: '#f0f4f8', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ flex: 1, padding: 24 }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
@@ -618,7 +619,8 @@ export default function PortalExamen() {
           />
         </div>
       )}
-      <NovexBadge style={{ marginTop: 32 }} />
+    </div>
+      <NovexBadge />
     </div>
   )
 }
