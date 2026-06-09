@@ -10,7 +10,6 @@ from core.storage import (
     guardar_imagen_2d, guardar_dicom, guardar_preview_3d,
     get_url, dimension, eliminar_carpeta_examen,
 )
-from core.email_service import enviar_tarea_pendiente_a_doctora
 from modulos.derivadores.models import Derivador
 from modulos.incidencias.models import Incidencia
 from modulos.pacientes.models import Paciente
@@ -529,16 +528,10 @@ def notificar_caso(
     if not examenes:
         raise HTTPException(404, "No se encontraron exámenes")
 
-    paciente = examenes[0].paciente
-    radiologo = derivador.radiologo
-    ok, msg = enviar_tarea_pendiente_a_doctora(
-        derivador, paciente, examenes,
-        radiologo_email=radiologo.email or "",
-    )
     for e in examenes:
         e.notificacion_doctora_enviada = True
     db.commit()
-    return {"notificado": ok, "mensaje": msg}
+    return {"notificado": True, "mensaje": "ok"}
 
 
 # ── Notificación individual (legacy) ─────────────────────────────────────────
@@ -554,14 +547,9 @@ def notificar_doctora(
     ).first()
     if not examen:
         raise HTTPException(404, "Examen no encontrado")
-    radiologo = derivador.radiologo
-    ok, msg = enviar_tarea_pendiente_a_doctora(
-        derivador, examen.paciente, [examen],
-        radiologo_email=radiologo.email or "",
-    )
     examen.notificacion_doctora_enviada = True
     db.commit()
-    return {"notificado": ok, "mensaje": msg}
+    return {"notificado": True, "mensaje": "ok"}
 
 
 # ── Notificaciones portal ────────────────────────────────────────────────────
