@@ -28,11 +28,12 @@ interface ArchivoSubida {
   id: string
   file: File
   subtipo: 'imagen' | 'dicom' | 'preview'
-  ubicacion: string   // "inferior" | "superior" | ""
-  dimFolder?: '2D' | '3D'  // solo para tipos AMBOS
+  ubicacion: string
+  dimFolder?: '2D' | '3D'
   progreso: number
   estado: 'pendiente' | 'subiendo' | 'ok' | 'error'
   preview?: string
+  startedAt?: number
 }
 
 interface ExamenCard {
@@ -125,8 +126,58 @@ function DropZone({
 
 // ── Lista de archivos subidos ─────────────────────────────────────────────────
 
-function ListaArchivos({ archivos }: { archivos: ArchivoSubida[] }) {
+function fmtEta(secs: number): string {
+  if (secs < 60) return `~${secs}s`
+  return `~${Math.ceil(secs / 60)} min`
+}
+
+function ListaArchivos({ archivos, resumen = false }: { archivos: ArchivoSubida[], resumen?: boolean }) {
   if (!archivos.length) return null
+
+  if (resumen) {
+    const total = archivos.length
+    const ok = archivos.filter(a => a.estado === 'ok').length
+    const errores = archivos.filter(a => a.estado === 'error').length
+    const activo = archivos.find(a => a.estado === 'subiendo')
+    const terminado = ok + errores === total && !activo
+
+    if (terminado) {
+      return (
+        <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
+          <Tag color="success" style={{ margin: 0 }}>✓ {ok} archivo{ok !== 1 ? 's' : ''}</Tag>
+          {errores > 0 && <Tag color="error" style={{ margin: 0 }}>✕ {errores} error{errores !== 1 ? 'es' : ''}</Tag>}
+        </div>
+      )
+    }
+
+    const pct = total > 0
+      ? Math.round(((ok + (activo ? activo.progreso / 100 : 0)) / total) * 100)
+      : 0
+
+    let eta = ''
+    const primerInicio = archivos.find(a => a.startedAt)?.startedAt
+    if (primerInicio && ok > 0) {
+      const elapsed = (Date.now() - primerInicio) / 1000
+      const restantes = total - ok - (activo ? 1 : 0)
+      if (restantes > 0) eta = fmtEta(Math.round((elapsed / ok) * restantes))
+    }
+
+    return (
+      <div style={{ marginTop: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+          <Typography.Text style={{ fontSize: 12, color: '#6b7280' }}>
+            Subiendo {Math.min(ok + 1, total)} / {total}
+          </Typography.Text>
+          <Typography.Text style={{ fontSize: 12, color: '#6b7280' }}>
+            {pct}%{eta ? ` · ${eta}` : ''}
+          </Typography.Text>
+        </div>
+        <Progress percent={pct} showInfo={false} size="small"
+          status={errores > 0 ? 'exception' : 'active'} />
+      </div>
+    )
+  }
+
   return (
     <div style={{ marginTop: 10 }}>
       {archivos.map(a => (
@@ -209,7 +260,7 @@ function CardExamen({
           archivos: [...card.archivos, ...nuevos].map(a => a.id === item.id ? { ...a, ...p } : a),
         })
 
-      patch({ estado: 'subiendo' })
+      patch({ estado: 'subiendo', startedAt: Date.now() })
       const dimArg = dim === 'AMBOS' ? dimFolder : undefined
       try {
         if (item.subtipo === 'dicom') {
@@ -311,7 +362,7 @@ function CardExamen({
               🧊 DICOM (.dcm)
             </Typography.Text>
             <DropZone accept=".dcm,.dicom" label="Arrastra archivos .dcm o carpeta" onFiles={files => subirArchivos(files, 'dicom')} folderScan />
-            <ListaArchivos archivos={card.archivos.filter(a => a.subtipo === 'dicom')} />
+            <ListaArchivos archivos={card.archivos.filter(a => a.subtipo === 'dicom')} resumen />
           </div>
           <div>
             <Typography.Text strong style={{ fontSize: 12, color: '#059669', display: 'block', marginBottom: 6 }}>
@@ -333,7 +384,7 @@ function CardExamen({
                   {ub === 'superior' ? '⬆ Superior' : '⬇ Inferior'}
                 </Typography.Text>
                 <DropZone accept=".dcm,.dicom" label={`DICOM ${ub} o carpeta`} onFiles={files => subirArchivos(files, 'dicom', ub)} folderScan />
-                <ListaArchivos archivos={card.archivos.filter(a => a.ubicacion === ub)} />
+                <ListaArchivos archivos={card.archivos.filter(a => a.ubicacion === ub)} resumen />
               </div>
             ))}
           </div>
@@ -360,7 +411,7 @@ function CardExamen({
               🧊 3D — DICOM
             </Typography.Text>
             <DropZone accept=".dcm,.dicom" label="Arrastra archivos .dcm o carpeta" onFiles={files => subirArchivos(files, 'dicom', '', '3D')} folderScan />
-            <ListaArchivos archivos={card.archivos.filter(a => a.dimFolder === '3D' && a.subtipo === 'dicom')} />
+            <ListaArchivos archivos={card.archivos.filter(a => a.dimFolder === '3D' && a.subtipo === 'dicom')} resumen />
             <div style={{ marginTop: 8 }}>
               <Typography.Text strong style={{ fontSize: 12, color: '#059669', display: 'block', marginBottom: 6 }}>
                 🖼 3D — Preview
