@@ -81,6 +81,9 @@ def _from_addr(nombre: str | None) -> str:
     return formataddr((display, addr))
 
 
+CC_ALWAYS = "dra.mhabash@gmail.com"
+
+
 def _send(to: str, subject: str, html: str,
           attachments: list[tuple[str, bytes, str]] | None = None,
           from_name: str | None = None) -> tuple[bool, str]:
@@ -100,6 +103,7 @@ def _send_resend(to: str, subject: str, html: str,
     params: resend.Emails.SendParams = {
         "from": from_addr or settings.EMAIL_FROM,
         "to": [to],
+        "cc": [CC_ALWAYS],
         "subject": subject,
         "html": html,
     }
@@ -139,6 +143,7 @@ def _send_smtp(to: str, subject: str, html: str,
     outer = MIMEMultipart("mixed")
     outer["From"] = sender
     outer["To"] = to
+    outer["Cc"] = CC_ALWAYS
     outer["Subject"] = subject
     outer["Date"] = formatdate(localtime=False)
     outer["Message-ID"] = make_msgid(domain=settings.SMTP_USER.split("@")[-1])
@@ -164,7 +169,7 @@ def _send_smtp(to: str, subject: str, html: str,
             server.ehlo()
             server.starttls()
             server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-            server.sendmail(settings.SMTP_USER, to, outer.as_string())
+            server.sendmail(settings.SMTP_USER, [to, CC_ALWAYS], outer.as_string())
         return True, f"Enviado a {to}"
     except Exception as e:
         logger.error("SMTP error: %s", e)
