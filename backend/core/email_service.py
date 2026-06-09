@@ -179,27 +179,29 @@ def enviar_magic_link_portal(derivador, link: str, radiologo_nombre: str = "Radi
     if not derivador.email:
         return False, "Derivador sin email."
     body = (
-        _h(f"Bienvenido/a al portal Derivador ({derivador.nombre})")
+        _h(f"Acceso al portal · {derivador.nombre}")
         + _p(
-            f"Estimado/a Centro <strong>{derivador.nombre}</strong>, a partir de ahora "
-            f"<strong>{radiologo_nombre}</strong> utiliza esta plataforma para la gestión "
-            f"de solicitudes e informes radiológicos."
+            f"Estimado/a <strong>{derivador.nombre}</strong>, le compartimos su enlace de acceso "
+            f"al portal de <strong>{radiologo_nombre}</strong>, donde podrá enviar solicitudes de exámenes "
+            f"y descargar informes en cuanto estén disponibles."
         )
         + _p(
-            "A través de su portal podrá <strong>enviar imágenes y solicitudes de exámenes</strong>, "
-            "hacer seguimiento del estado de sus casos y acceder a los informes finalizados "
-            "en cuanto estén disponibles."
+            "<strong>Este enlace es permanente y exclusivo para su clínica.</strong> "
+            "Siempre funcionará — no tiene fecha de vencimiento. "
+            "Le recomendamos guardarlo como acceso rápido en su navegador para ingresar en cualquier momento sin necesidad de solicitarlo nuevamente."
         )
         + _p(
-            "La primera vez que ingrese, un <strong>tutorial paso a paso</strong> lo guiará "
-            "por las funciones principales de la plataforma."
+            "<span style='font-size:12px;color:#64748B;'>"
+            "<strong>¿Cómo guardar el acceso rápido?</strong><br>"
+            "En Chrome o Edge: haga clic en el botón de abajo, luego en el ícono ★ de la barra de direcciones y guárdelo como favorito.<br>"
+            "En el celular: abra el enlace y use la opción <em>«Agregar a pantalla de inicio»</em> para tenerlo como ícono."
+            "</span>"
         )
-        + _p("El enlace de acceso es válido por <strong>24 horas</strong>.")
         + _btn("Ingresar al portal", link)
         + _p(f"<span style='font-size:11px;color:#94A3B8;'>Si el botón no funciona, copie este enlace en su navegador: {link}</span>")
     )
     titulo = f"Radiología · {radiologo_nombre}" if radiologo_nombre else "Radiología"
-    return _send(derivador.email, f"Acceso a su portal · {derivador.nombre} · {radiologo_nombre}", _html(body, titulo), from_name=radiologo_nombre or None)
+    return _send(derivador.email, f"Su enlace de acceso al portal · {derivador.nombre}", _html(body, titulo), from_name=radiologo_nombre or None)
 
 
 def enviar_tarea_pendiente_a_doctora(derivador, paciente, examenes: list, radiologo_email: str = "") -> tuple[bool, str]:
