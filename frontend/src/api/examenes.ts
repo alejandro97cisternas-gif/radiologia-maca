@@ -35,6 +35,7 @@ export interface Caso {
   imagenes_count: number
   tiene_informe: boolean
   incidencia_estado: 'ABIERTA' | 'RESUELTA' | null
+  archivo_estado: string | null
 }
 
 export function agruparEnCasos(examenes: Examen[]): Caso[] {
@@ -75,6 +76,8 @@ export function agruparEnCasos(examenes: Examen[]): Caso[] {
       tiene_informe: exs.every(e => e.tiene_informe),
       incidencia_estado: exs.find(e => e.incidencia_estado === 'ABIERTA')?.incidencia_estado
         ?? exs.find(e => e.incidencia_estado)?.incidencia_estado ?? null,
+      archivo_estado: exs.some(e => e.archivo_estado === 'archivado') ? 'archivado'
+        : exs.some(e => e.archivo_estado === 'dicom_archivado') ? 'dicom_archivado' : null,
     }
   })
 }
@@ -225,3 +228,9 @@ export const subirInforme = (examenId: number, file: File) => {
 
 export const eliminarInforme = (examenId: number, informeId: number) =>
   api.delete(`/api/examenes/${examenId}/informes/${informeId}`).then(r => r.data)
+
+export const archivarDicomsCaso = (casoId: string) =>
+  api.post(`/api/examenes/caso/${encodeURIComponent(casoId)}/archivar-dicoms`).then(r => r.data)
+
+export const desarchivarCaso = (casoId: string) =>
+  api.post(`/api/examenes/caso/${encodeURIComponent(casoId)}/desarchivar`).then(r => r.data)

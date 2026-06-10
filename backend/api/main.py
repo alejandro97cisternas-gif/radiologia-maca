@@ -4,7 +4,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from core.database import seed_superadmin
 from core.config import settings
 from core.tenant import TenantMiddleware
-from api.routers import auth, derivadores, portal, examenes, dashboard, honorarios, incidencias, admin
+from api.routers import auth, derivadores, portal, examenes, dashboard, honorarios, incidencias, admin, interno
 
 app = FastAPI(
     title="Gestión Informes Maca",
@@ -48,6 +48,7 @@ app.include_router(dashboard.router)
 app.include_router(honorarios.router)
 app.include_router(incidencias.router)
 app.include_router(admin.router)
+app.include_router(interno.router)
 
 
 @app.on_event("startup")

@@ -58,6 +58,7 @@ def _serializar(e: Examen, inc_estado: str | None = None) -> dict:
         "version": e.version or 0,
         "derivador_color": e.derivador.color or "#6b7280",
         "notificacion_derivador_enviada": e.notificacion_derivador_enviada,
+        "archivo_estado": e.archivo_estado,
     }
 
 
@@ -262,7 +263,33 @@ def notificar_derivador(caso_id: str, request: Request, db: Session = Depends(ge
         for e in examenes:
             e.notificacion_derivador_enviada = True
         db.commit()
-    return {"enviado": ok, "mensaje": msg, "reenvio": ya_enviado}
+    has_dicom = any(
+        img.tipo == "DICOM" for e in examenes for img in e.imagenes
+        if e.archivo_estado not in ("dicom_archivado", "archivado")
+    )
+    return {"enviado": ok, "mensaje": msg, "reenvio": ya_enviado, "has_dicom": has_dicom}
+
+
+@router.post("/caso/{caso_id}/archivar-dicoms")
+def archivar_dicoms(caso_id: str, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    from core.archivado import archivar_dicoms_caso
+    radiologo = get_tenant(request)
+    examenes = _examenes_por_caso(caso_id, radiologo.id, db)
+    if not examenes:
+        raise HTTPException(404, "Caso no encontrado")
+    ok = archivar_dicoms_caso(caso_id, examenes, db)
+    return {"archivado": ok}
+
+
+@router.post("/caso/{caso_id}/desarchivar")
+def desarchivar(caso_id: str, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    from core.archivado import desarchivar_caso
+    radiologo = get_tenant(request)
+    examenes = _examenes_por_caso(caso_id, radiologo.id, db)
+    if not examenes:
+        raise HTTPException(404, "Caso no encontrado")
+    ok = desarchivar_caso(caso_id, examenes, db)
+    return {"desarchivado": ok}
 
 
 @router.patch("/caso/{caso_id}/estado")
@@ -313,6 +340,10 @@ def presign_descarga_caso(caso_id: str, request: Request, db: Session = Depends(
                 archivos.append({"path": f"{folder}/{nombre}", "url": get_url(img.ruta, expiry=3600)})
 
     nombre_zip = f"{rut}-{'caso' if len(examenes) > 1 else examenes[0].tipo_examen}.zip"
+    now = datetime.now(timezone.utc)
+    for e in examenes:
+        e.ultimo_acceso_en = now
+    db.commit()
     return {"archivos": archivos, "nombre_zip": nombre_zip}
 
 
@@ -330,6 +361,10 @@ def descargar_caso(caso_id: str, request: Request, db: Session = Depends(get_db)
             conteo[img.ruta.rsplit("/", 1)[-1]] += 1
     compartidas = {n for n, c in conteo.items() if c > 1}
 
+    now = datetime.now(timezone.utc)
+    for e in examenes:
+        e.ultimo_acceso_en = now
+    db.commit()
     examenes_snap = [(e, list(e.imagenes)) for e in examenes]
 
     def _generar():

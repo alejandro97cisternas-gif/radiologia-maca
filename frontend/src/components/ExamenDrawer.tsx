@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  Drawer, Descriptions, Tag, Image, Button, message,
-  Spin, Empty, Tabs, Badge, Typography, Divider,
+  Drawer, Descriptions, Tag, Image, Button, message, Modal,
+  Spin, Empty, Tabs, Badge, Typography, Divider, Popconfirm,
 } from 'antd'
 import { UploadOutlined, DownloadOutlined, FilePdfOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons'
 import { filterDocFiles, extractDocsFromZip } from '../utils/dicomUpload'
 import type { Caso, ImagenExamen, InformeExamen } from '../api/examenes'
-import { getCasoDetalle, subirInforme, eliminarInforme, patchEstadoCaso, descargarCaso, notificarDerivador } from '../api/examenes'
+import { getCasoDetalle, subirInforme, eliminarInforme, patchEstadoCaso, descargarCaso, notificarDerivador, archivarDicomsCaso, desarchivarCaso } from '../api/examenes'
 import IncidenciaSection from './IncidenciaSection'
 
 type ExamenConImagenes = {
@@ -19,6 +19,7 @@ type ExamenConImagenes = {
   imagenes: ImagenExamen[]
   informes: InformeExamen[]
   notas: { id: number; comentario: string; creado_en: string }[]
+  archivo_estado: string | null
 }
 
 const ESTADO_COLOR: Record<string, string> = {
@@ -123,6 +124,8 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
   const [deletingInforme, setDeletingInforme] = useState<number | null>(null)
   const [downloadMb, setDownloadMb] = useState<number | null>(null)
   const [enviando, setEnviando] = useState(false)
+  const [archivando, setArchivando] = useState(false)
+  const [desarchivando, setDesarchivando] = useState(false)
   const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
   const resolveUrl = (url: string) => url.startsWith('http') ? url : `${BASE}${url}`
 
@@ -213,11 +216,41 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
       }
       const data = await getCasoDetalle(caso.caso_id)
       setExamenes(data.examenes as ExamenConImagenes[])
+      if (res.enviado && res.has_dicom) {
+        Modal.confirm({
+          title: '¿Archivar imágenes DICOM?',
+          content: 'Los archivos DICOM se comprimirán en un ZIP para ahorrar espacio. Las imágenes 2D e informes permanecen accesibles. El derivador puede descargar todo en cualquier momento.',
+          okText: 'Sí, archivar',
+          cancelText: 'Ahora no',
+          onOk: async () => {
+            setArchivando(true)
+            try {
+              await archivarDicomsCaso(caso.caso_id)
+              message.success('DICOMs archivados correctamente')
+              const d = await getCasoDetalle(caso.caso_id)
+              setExamenes(d.examenes as ExamenConImagenes[])
+            } catch { message.error('Error al archivar DICOMs') }
+            finally { setArchivando(false) }
+          },
+        })
+      }
     } catch {
       message.error('Error al enviar al derivador')
     } finally {
       setEnviando(false)
     }
+  }
+
+  const handleDesarchivar = async () => {
+    if (!caso) return
+    setDesarchivando(true)
+    try {
+      await desarchivarCaso(caso.caso_id)
+      message.success('Caso desarchivado — archivos restaurados')
+      const data = await getCasoDetalle(caso.caso_id)
+      setExamenes(data.examenes as ExamenConImagenes[])
+    } catch { message.error('Error al desarchivar') }
+    finally { setDesarchivando(false) }
   }
 
   return (
@@ -255,25 +288,40 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
       }
       footer={
         examenes.length > 0 ? (
-          <Button
-            block
-            disabled={!todosConInforme}
-            loading={enviando}
-            onClick={handleEnviarDerivador}
-            style={
-              !todosConInforme
-                ? undefined
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <Button
+              block
+              disabled={!todosConInforme}
+              loading={enviando || archivando}
+              onClick={handleEnviarDerivador}
+              style={
+                !todosConInforme
+                  ? undefined
+                  : yaNotificado
+                  ? { background: '#d97706', borderColor: '#d97706', color: '#fff' }
+                  : { background: '#1e3a5f', borderColor: '#1e3a5f', color: '#fff' }
+              }
+            >
+              {!todosConInforme
+                ? 'Sube todos los informes para enviar'
                 : yaNotificado
-                ? { background: '#d97706', borderColor: '#d97706', color: '#fff' }
-                : { background: '#1e3a5f', borderColor: '#1e3a5f', color: '#fff' }
-            }
-          >
-            {!todosConInforme
-              ? 'Sube todos los informes para enviar'
-              : yaNotificado
-              ? '⚠ Ya enviado · Reenviar al derivador'
-              : 'Enviar informes al derivador'}
-          </Button>
+                ? '⚠ Ya enviado · Reenviar al derivador'
+                : 'Enviar informes al derivador'}
+            </Button>
+            {examenes.some(e => e.archivo_estado) && (
+              <Popconfirm
+                title="¿Restaurar todos los archivos del caso?"
+                description="Los archivos se extraerán del ZIP y volverán a estar disponibles individualmente."
+                okText="Sí, desarchivar"
+                cancelText="Cancelar"
+                onConfirm={handleDesarchivar}
+              >
+                <Button block loading={desarchivando} icon={<span>📦</span>}>
+                  Desarchivar caso
+                </Button>
+              </Popconfirm>
+            )}
+          </div>
         ) : null
       }
     >
@@ -299,6 +347,12 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
                   <Tag color="blue" style={{ fontWeight: 600 }}>{examen.tipo_examen}</Tag>
                   <Tag color={ESTADO_COLOR[examen.estado]}>{examen.estado}</Tag>
                   {(examen.version ?? 0) > 0 && <Tag color="orange">v{examen.version}</Tag>}
+                  {examen.archivo_estado === 'archivado' && (
+                    <Tag color="default">📦 Archivado</Tag>
+                  )}
+                  {examen.archivo_estado === 'dicom_archivado' && (
+                    <Tag color="default">📦 DICOM archivado</Tag>
+                  )}
                   {examen.tiene_informe && (
                     <Tag color="success" icon={<CheckCircleOutlined />}>Informe subido</Tag>
                   )}

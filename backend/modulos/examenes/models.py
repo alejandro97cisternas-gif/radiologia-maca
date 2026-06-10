@@ -20,6 +20,10 @@ class Examen(Base):
     notificacion_derivador_enviada = Column(Boolean, default=False)
     creado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     completado_en = Column(DateTime, nullable=True)
+    ultimo_acceso_en = Column(DateTime, nullable=True)
+    archivo_estado = Column(String, nullable=True)   # None | 'dicom_archivado' | 'archivado'
+    archivado_en = Column(DateTime, nullable=True)
+    ruta_zip = Column(String, nullable=True)
 
     paciente = relationship("Paciente", back_populates="examenes")
     derivador = relationship("Derivador")

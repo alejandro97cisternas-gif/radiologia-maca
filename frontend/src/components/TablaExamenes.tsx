@@ -77,6 +77,7 @@ export default function TablaExamenes({ casos, onOpenCaso }: Props) {
           {isVencido(c) && <Tag color="red" style={{ margin: 0, fontSize: 10 }}>⏰ +48h</Tag>}
           {c.incidencia_estado === 'ABIERTA' && <Tag color="error" style={{ margin: 0, fontSize: 10 }}>⚠ Incidencia</Tag>}
           {c.incidencia_estado === 'RESUELTA' && <Tag color="success" style={{ margin: 0, fontSize: 10 }}>✓ Resuelta</Tag>}
+          {c.archivo_estado && <Tag color="default" style={{ margin: 0, fontSize: 10 }}>📦 Archivado</Tag>}
         </div>
       ),
     },
