@@ -5,6 +5,7 @@ import { TableOutlined, AppstoreOutlined, CalendarOutlined } from '@ant-design/i
 import PanelIncidencias from '../components/PanelIncidencias'
 import type { Examen, Caso } from '../api/examenes'
 import { getTodosExamenes, agruparEnCasos } from '../api/examenes'
+import { getMe } from '../api/auth'
 import TablaExamenes from '../components/TablaExamenes'
 import BoardExamenes from '../components/BoardExamenes'
 import CalendarioCasos from '../components/CalendarioCasos'
@@ -30,7 +31,10 @@ export default function Dashboard() {
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { cargar() }, [cargar])
+  useEffect(() => {
+    cargar()
+    getMe().then(u => { document.title = `Portal Doctor · ${u.nombre_display || u.username}` }).catch(() => {})
+  }, [cargar])
 
   const handleOpenCaso = (c: Caso) => {
     if (c.estado === 'PENDIENTE') {

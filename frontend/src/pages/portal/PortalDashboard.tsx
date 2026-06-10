@@ -250,7 +250,7 @@ export default function PortalDashboard() {
     portalGetNotificaciones().then(setNotificaciones).catch(() => {})
 
   const cargar = () => {
-    portalMe().then(setInfo)
+    portalMe().then(d => { setInfo(d); document.title = `Portal Clínica · ${d.nombre ?? ''}` })
     portalGetExamenes().then(data => setExamenes(data.filter((e: any) => e.estado !== 'BORRADOR')))
     cargarNotificaciones()
   }
