@@ -222,6 +222,27 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
 
   const todosConInforme = examenes.length > 0 && examenes.every(e => e.tiene_informe)
   const yaNotificado = examenes.some(e => e.notificacion_derivador_enviada)
+  const tieneDicomsActivos = examenes.some(e =>
+    e.imagenes.some(img => img.tipo === 'DICOM') &&
+    !['dicom_archivado', 'archivado', 'archivando'].includes(e.archivo_estado ?? '')
+  )
+
+  const confirmarArchivarDicoms = () => {
+    if (!caso) return
+    Modal.confirm({
+      title: '¿Archivar imágenes DICOM?',
+      content: 'Los archivos DICOM se comprimirán en un ZIP para ahorrar espacio. Las imágenes 2D e informes permanecen accesibles. El derivador puede descargar todo en cualquier momento.',
+      okText: 'Sí, archivar',
+      cancelText: 'Ahora no',
+      onOk: async () => {
+        try {
+          await archivarDicomsCaso(caso.caso_id)
+          await recargar()
+          message.info('Archivando DICOMs en segundo plano…')
+        } catch { message.error('Error al archivar DICOMs') }
+      },
+    })
+  }
 
   const handleEnviarDerivador = async () => {
     if (!caso) return
@@ -237,21 +258,7 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
       }
       const data = await getCasoDetalle(caso.caso_id)
       setExamenes(data.examenes as ExamenConImagenes[])
-      if (res.enviado && res.has_dicom) {
-        Modal.confirm({
-          title: '¿Archivar imágenes DICOM?',
-          content: 'Los archivos DICOM se comprimirán en un ZIP para ahorrar espacio. Las imágenes 2D e informes permanecen accesibles. El derivador puede descargar todo en cualquier momento.',
-          okText: 'Sí, archivar',
-          cancelText: 'Ahora no',
-          onOk: async () => {
-            try {
-              await archivarDicomsCaso(caso.caso_id)
-              await recargar()
-              message.info('Archivando DICOMs en segundo plano…')
-            } catch { message.error('Error al archivar DICOMs') }
-          },
-        })
-      }
+      if (res.enviado && res.has_dicom) confirmarArchivarDicoms()
     } catch {
       message.error('Error al enviar al derivador')
     } finally {
@@ -323,6 +330,11 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
                 ? '⚠ Ya enviado · Reenviar al derivador'
                 : 'Enviar informes al derivador'}
             </Button>
+            {tieneDicomsActivos && (
+              <Button block icon={<span>📦</span>} onClick={confirmarArchivarDicoms}>
+                Archivar DICOMs
+              </Button>
+            )}
             {examenes.some(e => e.archivo_estado) && (
               <Popconfirm
                 title="¿Restaurar todos los archivos del caso?"
