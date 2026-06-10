@@ -64,16 +64,26 @@ const portalIniciarSubida = (
   body: { nombre: string; total_chunks: number; subtipo: string; ubicacion?: string; dim_override?: string },
 ) => portalApi.post(`/api/portal/examenes/${examenId}/imagenes/iniciar-subida`, body).then(r => r.data as { upload_id: string })
 
-const portalSubirChunk = (examenId: number, uploadId: string, chunkIndex: number, chunk: Blob) => {
+const portalSubirChunk = (
+  examenId: number, uploadId: string, chunkIndex: number, chunk: Blob,
+  onChunkProgress?: (loaded: number, total: number) => void,
+) => {
   const form = new FormData()
   form.append('upload_id', uploadId)
   form.append('chunk_index', String(chunkIndex))
   form.append('chunk_data', chunk, 'chunk')
-  return portalApi.post(`/api/portal/examenes/${examenId}/imagenes/chunk`, form).then(r => r.data)
+  return portalApi.post(`/api/portal/examenes/${examenId}/imagenes/chunk`, form, {
+    onUploadProgress: e => { if (onChunkProgress && e.total) onChunkProgress(e.loaded, e.total) },
+    timeout: 10 * 60 * 1000, // 10 min por chunk
+  }).then(r => r.data)
 }
 
 const portalFinalizarSubida = (examenId: number, uploadId: string) =>
-  portalApi.post(`/api/portal/examenes/${examenId}/imagenes/finalizar-subida`, { upload_id: uploadId }).then(r => r.data)
+  portalApi.post(
+    `/api/portal/examenes/${examenId}/imagenes/finalizar-subida`,
+    { upload_id: uploadId },
+    { timeout: 30 * 60 * 1000 }, // 30 min para ensamblar + subir a R2
+  ).then(r => r.data)
 
 export const portalSubirEnChunks = async (
   examenId: number,
@@ -93,8 +103,13 @@ export const portalSubirEnChunks = async (
   })
   for (let i = 0; i < totalChunks; i++) {
     const start = i * CHUNK_SIZE
-    await portalSubirChunk(examenId, upload_id, i, file.slice(start, start + CHUNK_SIZE))
-    onProgress?.(Math.round(((i + 1) / totalChunks) * 90))
+    await portalSubirChunk(
+      examenId, upload_id, i, file.slice(start, start + CHUNK_SIZE),
+      (loaded, total) => {
+        // Progreso real: chunks completados + fracción del chunk actual
+        onProgress?.(Math.round(((i + loaded / total) / totalChunks) * 90))
+      },
+    )
   }
   const result = await portalFinalizarSubida(examenId, upload_id)
   onProgress?.(100)
@@ -152,3 +167,13 @@ export const portalLeerTodas = () =>
 
 // Tarifas (solo lectura)
 export const portalGetTarifas = () => portalApi.get('/api/portal/tarifas').then(r => r.data)
+
+export const portalDescargarInformes = (examenId: number, rut: string, tipo: string): Promise<void> =>
+  portalApi.get(`/api/portal/examenes/${examenId}/informes/descargar`, { responseType: 'blob' }).then(res => {
+    const url = URL.createObjectURL(res.data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Informes_${rut}_${tipo}.zip`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  })

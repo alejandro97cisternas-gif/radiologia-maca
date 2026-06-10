@@ -2,6 +2,7 @@ import uuid
 import json
 import shutil
 import tempfile
+import zipstream as _zs
 from datetime import date as DateType
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form, Query
@@ -15,8 +16,9 @@ from core.rut_utils import normalizar_rut, limpiar_rut
 from core.storage import (
     guardar_imagen_2d, guardar_dicom, guardar_preview_3d,
     guardar_desde_archivo, key_dicom, key_imagen_2d, key_preview_3d,
-    get_url, dimension, eliminar_carpeta_examen,
+    get_url, dimension, eliminar_carpeta_examen, stream_bytes,
 )
+from fastapi.responses import StreamingResponse
 from core.dicom_utils import es_dicom
 from modulos.derivadores.models import Derivador
 from modulos.incidencias.models import Incidencia
@@ -523,6 +525,40 @@ def finalizar_subida_chunked(
     shutil.rmtree(chunk_dir, ignore_errors=True)
 
     return {"id": imagen.id, "nombre": nombre, "subtipo": subtipo, "url": get_url(path)}
+
+
+@router.get("/examenes/{examen_id}/informes/descargar")
+def descargar_informes(
+    examen_id: int,
+    derivador: Derivador = Depends(get_portal_derivador),
+    db: Session = Depends(get_db),
+):
+    examen = db.query(Examen).filter(
+        Examen.id == examen_id, Examen.derivador_id == derivador.id
+    ).first()
+    if not examen:
+        raise HTTPException(404)
+    if not examen.informes:
+        raise HTTPException(404, "Sin informes")
+
+    rut = examen.paciente.rut or f"pac{examen.paciente_id}"
+    informes = list(examen.informes)
+
+    def _generar():
+        zf = _zs.ZipFile(mode="w", compression=_zs.ZIP_STORED, allowZip64=True)
+        for i, inf in enumerate(informes, 1):
+            nombre = inf.ruta_pdf.rsplit("/", 1)[-1]
+            if len(informes) > 1:
+                ext = nombre.rsplit(".", 1)[-1] if "." in nombre else "pdf"
+                nombre = f"informe_{i}.{ext}"
+            zf.write_iter(nombre, stream_bytes(inf.ruta_pdf))
+        yield from zf
+
+    filename = f"Informes_{rut}_{examen.tipo_examen}.zip"
+    return StreamingResponse(
+        _generar(), media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/examenes/{examen_id}/imagenes")

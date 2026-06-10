@@ -12,7 +12,7 @@ import {
 import {
   portalGetExamen, portalGetImagenes, portalGetRevisiones,
   portalSubirImagen, portalSubirEnChunks, portalEliminarImagen,
-  portalConfirmarEdicion, portalGuardarNota,
+  portalConfirmarEdicion, portalGuardarNota, portalDescargarInformes,
 } from '../../api/portal'
 import { readDropItems, filterDicomFromFiles } from '../../utils/dicomUpload'
 import { portalGetIncidencia, portalResolverIncidencia } from '../../api/incidencias'
@@ -74,6 +74,7 @@ export default function PortalExamen() {
 
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [descargando, setDescargando] = useState(false)
+  const [descargandoTodos, setDescargandoTodos] = useState(false)
 
   const handleDescargarInforme = async () => {
     if (!pdfUrl) return
@@ -291,6 +292,24 @@ export default function PortalExamen() {
                 {examen.informes.length > 1 ? `Informe ${idx + 1}` : 'Ver informe'}
               </Button>
             ))}
+            {examen.informes.length > 1 && (
+              <Button
+                icon={<DownloadOutlined />}
+                loading={descargandoTodos}
+                onClick={async () => {
+                  setDescargandoTodos(true)
+                  try {
+                    await portalDescargarInformes(examen.id, examen.paciente_rut || 'SIN_RUT', examen.tipo_examen)
+                  } catch {
+                    message.error('Error al descargar los informes')
+                  } finally {
+                    setDescargandoTodos(false)
+                  }
+                }}
+              >
+                Descargar todos
+              </Button>
+            )}
           </div>
         )}
 
