@@ -199,6 +199,7 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
           {examenes.map((examen, idx) => {
             const imgs2D = examen.imagenes.filter(i => i.tipo === '2D')
             const imgsDicom = examen.imagenes.filter(i => i.tipo === 'DICOM')
+            const imgsPreview = examen.imagenes.filter(i => i.tipo === 'PREVIEW')
             return (
               <div key={examen.id}>
                 {idx > 0 && <Divider style={{ margin: '20px 0' }} />}
@@ -212,27 +213,44 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
                 </div>
 
                 <Tabs items={[
-                  {
+                  ...(imgs2D.length > 0 ? [{
                     key: `2d-${examen.id}`,
                     label: <span>Imágenes 2D <Badge count={imgs2D.length} color="#2563EB" /></span>,
-                    children: imgs2D.length === 0
-                      ? <Empty description="Sin imágenes 2D" imageStyle={{ height: 48 }} />
-                      : (
-                        <Image.PreviewGroup>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                            {imgs2D.map(img => (
-                              <div key={img.id}>
-                                <Image src={resolveUrl(img.url)} alt={img.nombre}
-                                  style={{ width: '100%', height: 120, objectFit: 'cover' }} />
-                                <Typography.Text style={{ fontSize: 10, color: '#9ca3af', display: 'block', textAlign: 'center', marginTop: 2 }}>
-                                  {img.nombre}
-                                </Typography.Text>
-                              </div>
-                            ))}
-                          </div>
-                        </Image.PreviewGroup>
-                      ),
-                  },
+                    children: (
+                      <Image.PreviewGroup>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                          {imgs2D.map(img => (
+                            <div key={img.id}>
+                              <Image src={resolveUrl(img.url)} alt={img.nombre}
+                                style={{ width: '100%', height: 120, objectFit: 'cover' }} />
+                              <Typography.Text style={{ fontSize: 10, color: '#9ca3af', display: 'block', textAlign: 'center', marginTop: 2 }}>
+                                {img.nombre}
+                              </Typography.Text>
+                            </div>
+                          ))}
+                        </div>
+                      </Image.PreviewGroup>
+                    ),
+                  }] : []),
+                  ...(imgsPreview.length > 0 ? [{
+                    key: `preview-${examen.id}`,
+                    label: <span>Preview 3D <Badge count={imgsPreview.length} color="#059669" /></span>,
+                    children: (
+                      <Image.PreviewGroup>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                          {imgsPreview.map(img => (
+                            <div key={img.id}>
+                              <Image src={resolveUrl(img.url)} alt={img.nombre}
+                                style={{ width: '100%', height: 120, objectFit: 'cover' }} />
+                              <Typography.Text style={{ fontSize: 10, color: '#9ca3af', display: 'block', textAlign: 'center', marginTop: 2 }}>
+                                {img.nombre}
+                              </Typography.Text>
+                            </div>
+                          ))}
+                        </div>
+                      </Image.PreviewGroup>
+                    ),
+                  }] : []),
                   {
                     key: `dicom-${examen.id}`,
                     label: <span>DICOM <Badge count={imgsDicom.length} color="#7c3aed" /></span>,
