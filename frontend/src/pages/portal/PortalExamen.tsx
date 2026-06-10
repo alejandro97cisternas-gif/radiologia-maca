@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Row, Col, Image, Tag, Typography, Spin, Empty, Tabs, Button, Modal,
-  Alert, Divider, Form, Input, Popconfirm, Timeline, Progress,
+  Alert, Divider, Form, Input, Popconfirm, Timeline, Progress, Collapse,
 } from 'antd'
 import {
   ArrowLeftOutlined, WarningOutlined, CheckCircleOutlined,
@@ -482,32 +482,38 @@ export default function PortalExamen() {
               {imgsDicom.length === 0
                 ? <Empty description="Sin archivos DICOM" style={{ marginBottom: 16 }} />
                 : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16 }}>
-                    <thead>
-                      <tr style={{ background: '#f1f5f9', fontSize: 13 }}>
-                        <th style={{ padding: '8px 12px', textAlign: 'left' }}>Archivo</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'left' }}>Tipo</th>
-                        {editMode && <th style={{ padding: '8px 12px' }} />}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {imgsDicom.map(img => (
-                        <tr key={img.id} style={{ borderBottom: '1px solid #e5e7eb', fontSize: 13 }}>
-                          <td style={{ padding: '8px 12px' }}>{img.nombre}</td>
-                          <td style={{ padding: '8px 12px' }}><Tag color="purple">DICOM</Tag></td>
-                          {editMode && (
-                            <td style={{ padding: '8px 12px', textAlign: 'right' }}>
-                              <Popconfirm title={`¿Eliminar "${img.nombre}"?`} okText="Eliminar"
-                                cancelText="Cancelar" okButtonProps={{ danger: true }}
-                                onConfirm={() => handleEliminarImagen(img.id, img.nombre)}>
-                                <Button size="small" danger icon={<DeleteOutlined />} />
-                              </Popconfirm>
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <Collapse ghost defaultActiveKey={[]} style={{ marginBottom: 16 }} items={[{
+                    key: 'dicom',
+                    label: <Typography.Text style={{ fontSize: 13, color: '#6b7280' }}>{imgsDicom.length} archivo{imgsDicom.length !== 1 ? 's' : ''} DICOM</Typography.Text>,
+                    children: (
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: '#f1f5f9', fontSize: 13 }}>
+                            <th style={{ padding: '8px 12px', textAlign: 'left' }}>Archivo</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'left' }}>Tipo</th>
+                            {editMode && <th style={{ padding: '8px 12px' }} />}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {imgsDicom.map(img => (
+                            <tr key={img.id} style={{ borderBottom: '1px solid #e5e7eb', fontSize: 13 }}>
+                              <td style={{ padding: '8px 12px' }}>{img.nombre}</td>
+                              <td style={{ padding: '8px 12px' }}><Tag color="purple">DICOM</Tag></td>
+                              {editMode && (
+                                <td style={{ padding: '8px 12px', textAlign: 'right' }}>
+                                  <Popconfirm title={`¿Eliminar "${img.nombre}"?`} okText="Eliminar"
+                                    cancelText="Cancelar" okButtonProps={{ danger: true }}
+                                    onConfirm={() => handleEliminarImagen(img.id, img.nombre)}>
+                                    <Button size="small" danger icon={<DeleteOutlined />} />
+                                  </Popconfirm>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ),
+                  }]} />
                 )
               }
               {editMode && (

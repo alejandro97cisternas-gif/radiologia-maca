@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
   Drawer, Descriptions, Tag, Image, Button, message, Modal,
-  Spin, Empty, Tabs, Badge, Typography, Divider, Popconfirm,
+  Spin, Empty, Tabs, Badge, Typography, Divider, Popconfirm, Collapse,
 } from 'antd'
 import { UploadOutlined, DownloadOutlined, FilePdfOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons'
 import { filterDocFiles, extractDocsFromZip } from '../utils/dicomUpload'
@@ -431,15 +431,21 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
                     children: imgsDicom.length === 0
                       ? <Empty description="Sin archivos DICOM" imageStyle={{ height: 48 }} />
                       : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          {imgsDicom.map(img => (
-                            <div key={img.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: '#f8fafc', borderRadius: 6, border: '1px solid #e2e8f0' }}>
-                              <FilePdfOutlined style={{ color: '#7c3aed', fontSize: 18 }} />
-                              <Typography.Text style={{ fontSize: 13, flex: 1 }}>{img.nombre}</Typography.Text>
-                              <Tag color="purple" style={{ margin: 0 }}>DICOM</Tag>
+                        <Collapse ghost defaultActiveKey={[]} items={[{
+                          key: 'list',
+                          label: <Typography.Text style={{ fontSize: 12, color: '#6b7280' }}>{imgsDicom.length} archivo{imgsDicom.length !== 1 ? 's' : ''} DICOM</Typography.Text>,
+                          children: (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 320, overflowY: 'auto' }}>
+                              {imgsDicom.map(img => (
+                                <div key={img.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+                                  <FilePdfOutlined style={{ color: '#7c3aed', fontSize: 16 }} />
+                                  <Typography.Text style={{ fontSize: 12, flex: 1 }} ellipsis>{img.nombre}</Typography.Text>
+                                  <Tag color="purple" style={{ margin: 0, fontSize: 10 }}>DICOM</Tag>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
+                          ),
+                        }]} />
                       ),
                   },
                 ]} />
