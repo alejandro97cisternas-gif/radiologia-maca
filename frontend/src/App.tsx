@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { ConfigProvider, Spin } from 'antd'
 import esES from 'antd/locale/es_ES'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { UploadProvider } from './context/UploadContext'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import DerivadoresPage from './pages/DerivadoresPage'
@@ -14,6 +15,7 @@ import PortalExamen from './pages/portal/PortalExamen'
 import PortalTarifas from './pages/portal/PortalTarifas'
 import AdminLogin from './pages/admin/AdminLogin'
 import AdminDashboard from './pages/admin/AdminDashboard'
+import UploadFloatingPanel from './components/UploadFloatingPanel'
 
 function ProtectedRoutes() {
   const { token, isLoading } = useAuth()
@@ -45,10 +47,17 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/portal/acceder" element={<PortalAcceso />} />
             <Route path="/portal/acceder/:slug" element={<PortalAcceso />} />
-            <Route path="/portal/dashboard" element={<PortalDashboard />} />
-            <Route path="/portal/nuevo-paciente" element={<PortalNuevoPaciente />} />
-            <Route path="/portal/examen/:id" element={<PortalExamen />} />
-            <Route path="/portal/tarifas" element={<PortalTarifas />} />
+            <Route path="/portal/*" element={
+              <UploadProvider>
+                <Routes>
+                  <Route path="dashboard" element={<PortalDashboard />} />
+                  <Route path="nuevo-paciente" element={<PortalNuevoPaciente />} />
+                  <Route path="examen/:id" element={<PortalExamen />} />
+                  <Route path="tarifas" element={<PortalTarifas />} />
+                </Routes>
+                <UploadFloatingPanel />
+              </UploadProvider>
+            } />
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/*" element={<ProtectedRoutes />} />

@@ -10,9 +10,10 @@ import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import {
   portalBuscarPaciente, portalCrearPaciente, portalCrearExamen,
-  portalSubirImagen, portalSubirEnChunks, portalConfirmarTareas, portalNotificarCaso,
+  portalConfirmarTareas, portalNotificarCaso,
   portalGetTipos,
 } from '../../api/portal'
+import { useUpload } from '../../context/UploadContext'
 import { readDropItems, filterDicomFromFiles } from '../../utils/dicomUpload'
 import NovexBadge from '../../components/NovexBadge'
 import { normalizarRut } from '../../utils/rut'
@@ -215,6 +216,7 @@ function CardExamen({
   otrosExamenes: ExamenCard[]
   esLider: boolean
 }) {
+  const { startUpload } = useUpload()
   const dim = card.tipo_examen ? dimension(card.tipo_examen, tiposMap) : null
   const esBimax = card.tipo_examen === BIMAXILAR
   const tiposUsados = new Set(
@@ -244,7 +246,7 @@ function CardExamen({
     }
   }
 
-  const subirArchivos = async (files: File[], subtipo: ArchivoSubida['subtipo'], ubicacion = '', dimFolder?: '2D' | '3D') => {
+  const subirArchivos = (files: File[], subtipo: ArchivoSubida['subtipo'], ubicacion = '', dimFolder?: '2D' | '3D') => {
     if (!card.examen_id) return
     const nuevos: ArchivoSubida[] = files.map(f => ({
       id: `${f.name}-${Date.now()}-${Math.random()}`,
@@ -254,6 +256,8 @@ function CardExamen({
 
     onChange(card.uid, { archivos: [...card.archivos, ...nuevos] })
 
+    const dimArg = dim === 'AMBOS' ? dimFolder : undefined
+
     for (const item of nuevos) {
       const patch = (p: Partial<ArchivoSubida>) =>
         onChange(card.uid, c => ({
@@ -261,30 +265,26 @@ function CardExamen({
         }))
 
       patch({ estado: 'subiendo', startedAt: Date.now() })
-      const dimArg = dim === 'AMBOS' ? dimFolder : undefined
-      try {
-        if (item.subtipo === 'dicom') {
-          await portalSubirEnChunks(card.examen_id!, item.file, item.subtipo, pct => patch({ progreso: pct }), item.ubicacion, dimArg)
-        } else {
-          await portalSubirImagen(card.examen_id!, item.subtipo, item.file, pct => patch({ progreso: pct }), item.ubicacion, dimArg)
-        }
-        patch({ estado: 'ok', progreso: 100 })
-        if (replicar) {
-          for (const otro of otrosExamenes) {
-            if (otro.uid !== card.uid && otro.examen_id) {
-              try {
-                if (item.subtipo === 'dicom') {
-                  await portalSubirEnChunks(otro.examen_id, item.file, item.subtipo, undefined, item.ubicacion, dimArg)
-                } else {
-                  await portalSubirImagen(otro.examen_id, item.subtipo, item.file, undefined, item.ubicacion, dimArg)
-                }
-              } catch { /* silent */ }
+
+      startUpload({
+        examenId: card.examen_id!,
+        file: item.file,
+        subtipo: item.subtipo,
+        ubicacion: item.ubicacion,
+        dimOverride: dimArg,
+        onProgress: pct => patch({ progreso: pct }),
+        onComplete: () => {
+          patch({ estado: 'ok', progreso: 100 })
+          if (replicar) {
+            for (const otro of otrosExamenes) {
+              if (otro.uid !== card.uid && otro.examen_id) {
+                startUpload({ examenId: otro.examen_id, file: item.file, subtipo: item.subtipo, ubicacion: item.ubicacion, dimOverride: dimArg })
+              }
             }
           }
-        }
-      } catch {
-        patch({ estado: 'error' })
-      }
+        },
+        onError: () => patch({ estado: 'error' }),
+      })
     }
   }
 
