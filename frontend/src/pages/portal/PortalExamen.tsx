@@ -75,6 +75,7 @@ export default function PortalExamen() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [descargando, setDescargando] = useState(false)
   const [descargandoTodos, setDescargandoTodos] = useState(false)
+  const [descargaMb, setDescargaMb] = useState(0)
 
   const handleDescargarInforme = async () => {
     if (!pdfUrl) return
@@ -298,8 +299,12 @@ export default function PortalExamen() {
                 loading={descargandoTodos}
                 onClick={async () => {
                   setDescargandoTodos(true)
+                  setDescargaMb(0)
                   try {
-                    await portalDescargarInformes(examen.id, examen.paciente_rut || 'SIN_RUT', examen.tipo_examen)
+                    await portalDescargarInformes(
+                      examen.id, examen.paciente_rut || 'SIN_RUT', examen.tipo_examen,
+                      mb => setDescargaMb(mb),
+                    )
                   } catch {
                     message.error('Error al descargar los informes')
                   } finally {
@@ -307,7 +312,7 @@ export default function PortalExamen() {
                   }
                 }}
               >
-                Descargar todos
+                {descargandoTodos ? `${descargaMb.toFixed(1)} MB...` : 'Descargar todos'}
               </Button>
             )}
           </div>

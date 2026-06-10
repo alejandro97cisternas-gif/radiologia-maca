@@ -168,12 +168,39 @@ export const portalLeerTodas = () =>
 // Tarifas (solo lectura)
 export const portalGetTarifas = () => portalApi.get('/api/portal/tarifas').then(r => r.data)
 
-export const portalDescargarInformes = (examenId: number, rut: string, tipo: string): Promise<void> =>
-  portalApi.get(`/api/portal/examenes/${examenId}/informes/descargar`, { responseType: 'blob' }).then(res => {
-    const url = URL.createObjectURL(res.data)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `Informes_${rut}_${tipo}.zip`
-    document.body.appendChild(a); a.click(); document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+export const portalDescargarInformes = (
+  examenId: number, rut: string, tipo: string,
+  onProgress?: (mb: number) => void,
+): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const token = localStorage.getItem('portal_token')
+    const slug = (() => {
+      const host = window.location.hostname
+      const base = import.meta.env.VITE_BASE_DOMAIN || 'localhost'
+      if (host.endsWith(`.${base}`)) return host.slice(0, -(base.length + 1))
+      return localStorage.getItem('dev_tenant_slug')
+    })()
+    const xhr = new XMLHttpRequest()
+    xhr.open('GET', `${BASE}/api/portal/examenes/${examenId}/informes/descargar`)
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    if (slug) xhr.setRequestHeader('X-Tenant-Slug', slug)
+    xhr.responseType = 'blob'
+    xhr.onprogress = e => onProgress?.(e.loaded / (1024 * 1024))
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const url = URL.createObjectURL(xhr.response)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `Informes_${rut}_${tipo}.zip`
+        document.body.appendChild(a); a.click(); document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        resolve()
+      } else {
+        reject(new Error(`HTTP ${xhr.status}`))
+      }
+    }
+    xhr.onerror = () => reject(new Error('Error de red'))
+    xhr.send()
   })
+}
