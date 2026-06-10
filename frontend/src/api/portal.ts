@@ -57,7 +57,8 @@ export const portalSubirImagen = (
 
 // ── Upload chunkeado (para archivos DICOM grandes) ────────────────────────────
 
-const CHUNK_SIZE = 2 * 1024 * 1024 // 2 MB
+const CHUNK_SIZE = 4 * 1024 * 1024 // 4 MB
+const UPLOAD_CONCURRENCY = 3       // chunks en paralelo
 
 const portalIniciarSubida = (
   examenId: number,
@@ -101,16 +102,32 @@ export const portalSubirEnChunks = async (
     ubicacion,
     dim_override: dimOverride,
   })
-  for (let i = 0; i < totalChunks; i++) {
+
+  // Progreso por chunk: 0.0–1.0
+  const chunkProgress = new Float32Array(totalChunks)
+
+  const uploadOne = async (i: number) => {
     const start = i * CHUNK_SIZE
     await portalSubirChunk(
       examenId, upload_id, i, file.slice(start, start + CHUNK_SIZE),
       (loaded, total) => {
-        // Progreso real: chunks completados + fracción del chunk actual
-        onProgress?.(Math.round(((i + loaded / total) / totalChunks) * 90))
+        chunkProgress[i] = loaded / total
+        const done = chunkProgress.reduce((s, v) => s + v, 0) / totalChunks
+        onProgress?.(Math.round(done * 90))
       },
     )
+    chunkProgress[i] = 1
   }
+
+  // Sliding-window: UPLOAD_CONCURRENCY workers consumen la cola en paralelo
+  let next = 0
+  const worker = async () => {
+    while (next < totalChunks) {
+      await uploadOne(next++)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, totalChunks) }, worker))
+
   const result = await portalFinalizarSubida(examenId, upload_id)
   onProgress?.(100)
   return result
