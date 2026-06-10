@@ -277,6 +277,41 @@ def actualizar_estado_caso(caso_id: str, body: dict, request: Request, db: Sessi
     return {"caso_id": caso_id, "estado": estado}
 
 
+@router.get("/caso/{caso_id}/presign-descarga")
+def presign_descarga_caso(caso_id: str, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    """Devuelve URLs presignadas de descarga directa desde R2 para cada imagen del caso."""
+    from core.storage import _is_r2
+    if not _is_r2():
+        raise HTTPException(501, "Solo disponible con storage R2")
+
+    radiologo = get_tenant(request)
+    examenes = _examenes_por_caso(caso_id, radiologo.id, db)
+    rut = examenes[0].paciente.rut or f"pac{examenes[0].paciente_id}"
+
+    from collections import defaultdict
+    conteo: dict[str, int] = defaultdict(int)
+    for examen in examenes:
+        for img in examen.imagenes:
+            conteo[img.ruta.rsplit("/", 1)[-1]] += 1
+    compartidas = {n for n, c in conteo.items() if c > 1}
+
+    archivos = []
+    escritas_compartidas: set[str] = set()
+    for examen in examenes:
+        folder = examen.tipo_examen.replace("/", "-")[:40]
+        for img in examen.imagenes:
+            nombre = img.ruta.rsplit("/", 1)[-1]
+            if nombre in compartidas:
+                if nombre not in escritas_compartidas:
+                    escritas_compartidas.add(nombre)
+                    archivos.append({"path": f"imagenes_compartidas/{nombre}", "url": get_url(img.ruta, expiry=3600)})
+            else:
+                archivos.append({"path": f"{folder}/{nombre}", "url": get_url(img.ruta, expiry=3600)})
+
+    nombre_zip = f"{rut}-{'caso' if len(examenes) > 1 else examenes[0].tipo_examen}.zip"
+    return {"archivos": archivos, "nombre_zip": nombre_zip}
+
+
 @router.get("/caso/{caso_id}/descargar")
 def descargar_caso(caso_id: str, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
     radiologo = get_tenant(request)

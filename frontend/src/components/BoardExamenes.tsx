@@ -87,10 +87,12 @@ function CasoCard({ caso, onClick, dragging }: { caso: Caso; onClick: () => void
                 style={{ color: '#6b7280', cursor: 'pointer', fontSize: 13 }}
                 onClick={async ev => {
                   ev.stopPropagation()
-                  const hide = message.loading('Preparando descarga…', 0)
-                  try { await descargarCaso(caso) }
-                  catch { message.error('Error al descargar') }
-                  finally { hide() }
+                  const key = `dl-${caso.caso_id}`
+                  message.loading({ content: 'Descargando…', key, duration: 0 })
+                  try {
+                    await descargarCaso(caso, pct => message.loading({ content: `Descargando… ${pct}%`, key, duration: 0 }))
+                    message.success({ content: '✓ Descarga lista', key, duration: 2 })
+                  } catch { message.error({ content: 'Error al descargar', key, duration: 3 }) }
                 }}
               />
             </Tooltip>

@@ -133,8 +133,8 @@ export const getCasoDetalle = (casoId: string) =>
 export const patchEstadoCaso = (casoId: string, estado: string) =>
   api.patch(`/api/examenes/caso/${encodeURIComponent(casoId)}/estado`, { estado }).then(r => r.data)
 
-export const descargarCaso = (caso: Caso, onProgress?: (mb: number) => void): Promise<void> => {
-  return new Promise((resolve, reject) => {
+const _descargarCasoVPS = (caso: Caso, onProgress?: (pct: number) => void): Promise<void> =>
+  new Promise((resolve, reject) => {
     const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
     const token = localStorage.getItem('token')
     const slug = (() => {
@@ -143,15 +143,12 @@ export const descargarCaso = (caso: Caso, onProgress?: (mb: number) => void): Pr
       if (host.endsWith(`.${base}`)) return host.slice(0, -(base.length + 1))
       return localStorage.getItem('dev_tenant_slug')
     })()
-
     const xhr = new XMLHttpRequest()
     xhr.open('GET', `${BASE}/api/examenes/caso/${encodeURIComponent(caso.caso_id)}/descargar`)
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     if (slug) xhr.setRequestHeader('X-Tenant-Slug', slug)
     xhr.responseType = 'blob'
-
-    xhr.onprogress = e => onProgress?.(e.loaded / (1024 * 1024))
-
+    xhr.onprogress = e => { if (e.lengthComputable) onProgress?.(Math.round(e.loaded / e.total * 90)) }
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         const url = URL.createObjectURL(xhr.response)
@@ -161,13 +158,58 @@ export const descargarCaso = (caso: Caso, onProgress?: (mb: number) => void): Pr
         document.body.appendChild(a); a.click(); document.body.removeChild(a)
         URL.revokeObjectURL(url)
         resolve()
-      } else {
-        reject(new Error(`HTTP ${xhr.status}`))
-      }
+      } else { reject(new Error(`HTTP ${xhr.status}`)) }
     }
     xhr.onerror = () => reject(new Error('Error de red'))
     xhr.send()
   })
+
+export const descargarCaso = async (caso: Caso, onProgress?: (pct: number) => void): Promise<void> => {
+  // Intenta descarga directa desde R2 (presigned URLs)
+  let presignData: { archivos: { path: string; url: string }[]; nombre_zip: string } | null = null
+  try {
+    presignData = await api.get(
+      `/api/examenes/caso/${encodeURIComponent(caso.caso_id)}/presign-descarga`
+    ).then(r => r.data)
+  } catch (err: any) {
+    if (err.response?.status !== 501) throw err
+    // 501 = storage local, usar VPS
+  }
+
+  if (!presignData) return _descargarCasoVPS(caso, onProgress)
+
+  const { archivos, nombre_zip } = presignData
+  const CONCURRENT = 6
+  const files: Record<string, Uint8Array> = {}
+  let done = 0
+
+  let next = 0
+  const worker = async () => {
+    while (next < archivos.length) {
+      const i = next++
+      const { path, url } = archivos[i]
+      const resp = await fetch(url)
+      if (!resp.ok) throw new Error(`R2 HTTP ${resp.status} descargando ${path}`)
+      files[path] = new Uint8Array(await resp.arrayBuffer())
+      done++
+      onProgress?.(Math.round(done / archivos.length * 85))
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENT, archivos.length) }, worker))
+
+  onProgress?.(90)
+  const { zip } = await import('fflate')
+  const zipped = await new Promise<Uint8Array>((resolve, reject) =>
+    zip(files, { level: 0 }, (err, data) => err ? reject(err) : resolve(data))
+  )
+
+  onProgress?.(100)
+  const blob = new Blob([zipped], { type: 'application/zip' })
+  const blobUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = blobUrl; a.download = nombre_zip
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+  URL.revokeObjectURL(blobUrl)
 }
 
 export const notificarDerivador = (casoId: string) =>
