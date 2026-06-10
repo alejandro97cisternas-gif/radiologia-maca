@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
-  Drawer, Descriptions, Tag, Image, Upload, Button, message,
+  Drawer, Descriptions, Tag, Image, Button, message,
   Spin, Empty, Tabs, Badge, Typography, Divider,
 } from 'antd'
 import { UploadOutlined, DownloadOutlined, FilePdfOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons'
+import { filterDocFiles, extractDocsFromZip } from '../utils/dicomUpload'
 import type { Caso, ImagenExamen, InformeExamen } from '../api/examenes'
 import { getCasoDetalle, subirInforme, eliminarInforme, patchEstadoCaso, descargarCaso, notificarDerivador } from '../api/examenes'
 import IncidenciaSection from './IncidenciaSection'
@@ -24,6 +25,90 @@ const ESTADO_COLOR: Record<string, string> = {
   PENDIENTE: 'orange', EN_PROCESO: 'processing', COMPLETADO: 'success',
 }
 
+function InformeDropZone({ onFiles, loading, label }: {
+  onFiles: (files: File[]) => void
+  loading: boolean
+  label: string
+}) {
+  const [isDragging, setIsDragging] = useState(false)
+  const [procesando, setProcesando] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const folderRef = useRef<HTMLInputElement>(null)
+  const zipRef = useRef<HTMLInputElement>(null)
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    const items = Array.from(e.dataTransfer.files)
+    const zips = items.filter(f => f.name.toLowerCase().endsWith('.zip'))
+    const rest = filterDocFiles(items.filter(f => !f.name.toLowerCase().endsWith('.zip')))
+    if (!zips.length) { if (rest.length) onFiles(rest); return }
+    setProcesando(true)
+    try {
+      const extracted: File[] = []
+      for (const z of zips) { const r = await extractDocsFromZip(z); extracted.push(...r.files) }
+      onFiles([...rest, ...extracted])
+    } finally { setProcesando(false) }
+  }
+
+  const handleZip = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    e.target.value = ''
+    if (!files.length) return
+    setProcesando(true)
+    try {
+      const extracted: File[] = []
+      for (const z of files) { const r = await extractDocsFromZip(z); extracted.push(...r.files) }
+      onFiles(extracted)
+    } finally { setProcesando(false) }
+  }
+
+  const busy = loading || procesando
+  return (
+    <div style={{ marginTop: 10 }}>
+      <input ref={fileRef} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.ppt,.pptx" style={{ display: 'none' }}
+        onChange={e => { const f = filterDocFiles(Array.from(e.target.files ?? [])); e.target.value = ''; if (f.length) onFiles(f) }} />
+      <input ref={folderRef} type="file" style={{ display: 'none' }}
+        {...{ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>}
+        onChange={e => { const f = filterDocFiles(Array.from(e.target.files ?? [])); e.target.value = ''; if (f.length) onFiles(f) }} />
+      <input ref={zipRef} type="file" accept=".zip" style={{ display: 'none' }} onChange={handleZip} />
+      <div
+        onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={handleDrop}
+        style={{
+          border: `2px dashed ${isDragging ? '#2563EB' : '#d1d5db'}`,
+          borderRadius: 8, padding: '14px 12px',
+          background: isDragging ? '#eff6ff' : '#fafafa',
+          textAlign: 'center', transition: 'all 0.2s',
+        }}
+      >
+        {busy ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <Spin size="small" />
+            <Typography.Text style={{ fontSize: 12, color: '#6b7280' }}>
+              {procesando ? 'Procesando ZIP…' : 'Subiendo…'}
+            </Typography.Text>
+          </div>
+        ) : (
+          <>
+            <Typography.Text style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 8 }}>
+              {label} · Arrastra archivos o un ZIP aquí
+            </Typography.Text>
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <Button size="small" icon={<UploadOutlined />} onClick={() => fileRef.current?.click()}>
+                Seleccionar archivos
+              </Button>
+              <Button size="small" onClick={() => folderRef.current?.click()}>📂 Carpeta</Button>
+              <Button size="small" onClick={() => zipRef.current?.click()}>🗜 ZIP</Button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 interface Props {
   caso: Caso | null
   onClose: () => void
@@ -34,6 +119,7 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
   const [examenes, setExamenes] = useState<ExamenConImagenes[]>([])
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState<number | null>(null)
+  const [uploadLabel, setUploadLabel] = useState('')
   const [deletingInforme, setDeletingInforme] = useState<number | null>(null)
   const [downloadMb, setDownloadMb] = useState<number | null>(null)
   const [enviando, setEnviando] = useState(false)
@@ -74,18 +160,23 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
     setExamenes(data.examenes as ExamenConImagenes[])
   }
 
-  const handleSubirPDF = async (examenId: number, file: File) => {
+  const handleSubirArchivos = async (examenId: number, files: File[]) => {
+    if (!files.length) return
     setUploading(examenId)
-    try {
-      await subirInforme(examenId, file)
-      await recargar()
-      message.success('Informe subido')
-    } catch {
-      message.error('Error al subir el informe')
-    } finally {
-      setUploading(null)
+    let ok = 0
+    for (let i = 0; i < files.length; i++) {
+      setUploadLabel(files.length > 1 ? `Subiendo ${i + 1}/${files.length}…` : 'Subiendo…')
+      try {
+        await subirInforme(examenId, files[i])
+        ok++
+      } catch {
+        message.error(`Error al subir ${files[i].name}`)
+      }
     }
-    return false
+    await recargar()
+    if (ok > 0) message.success(ok === 1 ? 'Informe subido' : `${ok} archivos subidos`)
+    setUploading(null)
+    setUploadLabel('')
   }
 
   const handleEliminarInforme = async (examenId: number, informeId: number) => {
@@ -286,16 +377,11 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
                     ))}
                   </div>
                 )}
-                <Upload accept=".pdf,.png,.jpg,.jpeg,.ppt,.pptx" showUploadList={false} beforeUpload={f => handleSubirPDF(examen.id, f)}>
-                  <Button
-                    icon={<UploadOutlined />}
-                    loading={uploading === examen.id}
-                    style={{ marginTop: 10 }}
-                    block
-                  >
-                    {examen.tiene_informe ? 'Agregar otro informe' : `Subir informe — ${examen.tipo_examen}`}
-                  </Button>
-                </Upload>
+                <InformeDropZone
+                  loading={uploading === examen.id}
+                  label={uploading === examen.id ? uploadLabel : (examen.tiene_informe ? 'Agregar informe' : `Subir informe — ${examen.tipo_examen}`)}
+                  onFiles={files => handleSubirArchivos(examen.id, files)}
+                />
 
                 {examen.notas?.length > 0 && (
                   <div style={{ marginTop: 12, padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6 }}>

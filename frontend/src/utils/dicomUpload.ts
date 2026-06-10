@@ -69,3 +69,28 @@ export async function extractDicomFromZip(zipFile: File): Promise<{ dicom: File[
   const { dicom, skipped } = await filterDicomFromFiles(candidates)
   return { dicom, skipped, total: candidates.length }
 }
+
+const DOC_EXTS = new Set(['pdf', 'png', 'jpg', 'jpeg', 'ppt', 'pptx'])
+
+export function filterDocFiles(files: File[]): File[] {
+  return files.filter(f => DOC_EXTS.has(f.name.split('.').pop()?.toLowerCase() ?? ''))
+}
+
+export async function extractDocsFromZip(zipFile: File): Promise<{ files: File[]; skipped: number }> {
+  const { unzipSync } = await import('fflate')
+  const buf = await zipFile.arrayBuffer()
+  const entries = unzipSync(new Uint8Array(buf))
+  let skipped = 0
+  const files: File[] = []
+  for (const [name, data] of Object.entries(entries)) {
+    if (name.endsWith('/')) continue
+    const ext = name.split('.').pop()?.toLowerCase() ?? ''
+    const basename = name.split('/').pop() || name
+    if (DOC_EXTS.has(ext)) {
+      files.push(new File([data], basename, { type: 'application/octet-stream' }))
+    } else {
+      skipped++
+    }
+  }
+  return { files, skipped }
+}
