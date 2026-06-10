@@ -97,8 +97,10 @@ export default function TablaExamenes({ casos, onOpenCaso }: Props) {
             <Col>
               <Tooltip title="Descargar imágenes">
                 <Button size="small" icon={<DownloadOutlined />} onClick={async () => {
+                  const hide = message.loading('Preparando descarga…', 0)
                   try { await descargarCaso(c) }
                   catch { message.error('Error al descargar') }
+                  finally { hide() }
                 }} />
               </Tooltip>
             </Col>

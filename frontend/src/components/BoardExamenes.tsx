@@ -87,8 +87,10 @@ function CasoCard({ caso, onClick, dragging }: { caso: Caso; onClick: () => void
                 style={{ color: '#6b7280', cursor: 'pointer', fontSize: 13 }}
                 onClick={async ev => {
                   ev.stopPropagation()
+                  const hide = message.loading('Preparando descarga…', 0)
                   try { await descargarCaso(caso) }
                   catch { message.error('Error al descargar') }
+                  finally { hide() }
                 }}
               />
             </Tooltip>
