@@ -301,6 +301,10 @@ def detalle_examen(
         "dimension": _resolver_dim(examen.tipo_examen, derivador.radiologo_id, db),
         "creado_en": examen.creado_en,
         "informe_url": get_url(examen.informe.ruta_pdf) if examen.informe else None,
+        "informes": [
+            {"id": inf.id, "nombre": inf.ruta_pdf.rsplit("/", 1)[-1], "url": get_url(inf.ruta_pdf)}
+            for inf in examen.informes
+        ],
     }
 
 

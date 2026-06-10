@@ -72,14 +72,14 @@ export default function PortalExamen() {
   const [incidencia, setIncidencia] = useState<Incidencia | null | undefined>(undefined)
   const [loading, setLoading] = useState(true)
 
-  const [pdfOpen, setPdfOpen] = useState(false)
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [descargando, setDescargando] = useState(false)
 
   const handleDescargarInforme = async () => {
-    if (!examen?.informe_url) return
+    if (!pdfUrl) return
     setDescargando(true)
     try {
-      const res = await fetch(resolveUrl(examen.informe_url))
+      const res = await fetch(resolveUrl(pdfUrl))
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -277,17 +277,21 @@ export default function PortalExamen() {
           </Typography.Text>
         )}
 
-        {/* Botón informe (COMPLETADO) */}
-        {examen?.informe_url && (
-          <Button
-            icon={<FilePdfOutlined />}
-            type="primary"
-            ghost
-            onClick={() => setPdfOpen(true)}
-            style={{ marginLeft: 'auto' }}
-          >
-            Ver informe
-          </Button>
+        {/* Botones informes (uno por cada PDF subido) */}
+        {examen?.informes?.length > 0 && (
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {examen.informes.map((inf: { id: number; nombre: string; url: string }, idx: number) => (
+              <Button
+                key={inf.id}
+                icon={<FilePdfOutlined />}
+                type="primary"
+                ghost
+                onClick={() => setPdfUrl(inf.url)}
+              >
+                {examen.informes.length > 1 ? `Informe ${idx + 1}` : 'Ver informe'}
+              </Button>
+            ))}
+          </div>
         )}
 
         {/* Botones de modo edición */}
@@ -295,7 +299,7 @@ export default function PortalExamen() {
           <Button
             icon={<EditOutlined />}
             onClick={() => setEditMode(true)}
-            style={{ marginLeft: examen?.informe_url ? 0 : 'auto' }}
+            style={{ marginLeft: examen?.informes?.length > 0 ? 0 : 'auto' }}
           >
             Modificar
           </Button>
@@ -598,8 +602,8 @@ export default function PortalExamen() {
 
       {/* Modal preview informe PDF */}
       <Modal
-        open={pdfOpen}
-        onCancel={() => setPdfOpen(false)}
+        open={!!pdfUrl}
+        onCancel={() => setPdfUrl(null)}
         footer={
           <Button icon={<DownloadOutlined />} loading={descargando} onClick={handleDescargarInforme}>
             Descargar
@@ -615,9 +619,9 @@ export default function PortalExamen() {
           </span>
         }
       >
-        {examen?.informe_url && (
+        {pdfUrl && (
           <iframe
-            src={resolveUrl(examen.informe_url)}
+            src={resolveUrl(pdfUrl)}
             style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
             title="Informe PDF"
           />
