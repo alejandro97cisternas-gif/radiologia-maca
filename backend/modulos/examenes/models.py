@@ -24,7 +24,11 @@ class Examen(Base):
     paciente = relationship("Paciente", back_populates="examenes")
     derivador = relationship("Derivador")
     imagenes = relationship("ImagenExamen", back_populates="examen", cascade="all, delete-orphan")
-    informe = relationship("Informe", back_populates="examen", uselist=False)
+    informes = relationship("Informe", back_populates="examen", cascade="all, delete-orphan", order_by="Informe.id")
+
+    @property
+    def informe(self):
+        return self.informes[-1] if self.informes else None
     revisiones = relationship("RevisionExamen", back_populates="examen", cascade="all, delete-orphan", order_by="RevisionExamen.id")
 
 

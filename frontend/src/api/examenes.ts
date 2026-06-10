@@ -86,6 +86,13 @@ export interface ImagenExamen {
   url: string
 }
 
+export interface InformeExamen {
+  id: number
+  nombre: string
+  url: string
+  token: string
+}
+
 export interface ExamenDetalle extends Examen {
   imagenes: ImagenExamen[]
 }
@@ -119,7 +126,7 @@ export const descargarImagenes = async (examen: Examen): Promise<void> => {
 }
 
 export const getCasoDetalle = (casoId: string) =>
-  api.get<{ examenes: (Examen & { imagenes: ImagenExamen[] })[] }>(
+  api.get<{ examenes: (Examen & { imagenes: ImagenExamen[], informes: InformeExamen[] })[] }>(
     `/api/examenes/caso/${encodeURIComponent(casoId)}`
   ).then(r => r.data)
 
@@ -173,3 +180,6 @@ export const subirInforme = (examenId: number, file: File) => {
     headers: { 'Content-Type': 'multipart/form-data' },
   }).then(r => r.data)
 }
+
+export const eliminarInforme = (examenId: number, informeId: number) =>
+  api.delete(`/api/examenes/${examenId}/informes/${informeId}`).then(r => r.data)

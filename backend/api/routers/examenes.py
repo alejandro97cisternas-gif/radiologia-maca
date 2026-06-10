@@ -52,8 +52,8 @@ def _serializar(e: Examen, inc_estado: str | None = None) -> dict:
         "creado_en": e.creado_en,
         "completado_en": e.completado_en,
         "imagenes_count": len(e.imagenes),
-        "tiene_informe": e.informe is not None,
-        "informe_token": e.informe.token_publico if e.informe else None,
+        "tiene_informe": bool(e.informes),
+        "informe_token": e.informes[-1].token_publico if e.informes else None,
         "incidencia_estado": inc_estado,
         "version": e.version or 0,
         "derivador_color": e.derivador.color or "#6b7280",
@@ -130,16 +130,14 @@ async def subir_informe(
     rut = examen.paciente.rut or f"pac{examen.paciente_id}"
     path = guardar_informe_pdf(radiologo.id, examen.derivador_id or 0, rut, examen_id, examen.tipo_examen, archivo.filename, datos)
 
-    informe = db.query(Informe).filter(Informe.examen_id == examen_id).first()
-    if informe:
-        informe.ruta_pdf = str(path)
-    else:
-        token = str(uuid.uuid4())
-        informe = Informe(examen_id=examen_id, ruta_pdf=str(path), token_publico=token)
-        db.add(informe)
+    es_primero = not bool(examen.informes)
+    informe = Informe(examen_id=examen_id, ruta_pdf=str(path), token_publico=str(uuid.uuid4()))
+    db.add(informe)
 
-    examen.estado = "COMPLETADO"
-    examen.completado_en = datetime.now(timezone.utc)
+    if es_primero:
+        examen.estado = "COMPLETADO"
+        examen.completado_en = datetime.now(timezone.utc)
+
     db.commit()
     db.refresh(informe)
 
@@ -154,6 +152,26 @@ async def subir_informe(
     db.commit()
 
     return {"informe_id": informe.id, "token_publico": informe.token_publico, "link_pdf": link_pdf}
+
+
+@router.delete("/{examen_id}/informes/{informe_id}", status_code=204)
+def eliminar_informe(
+    examen_id: int,
+    informe_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    radiologo = get_tenant(request)
+    examen = _examen_del_tenant(examen_id, radiologo.id, db)
+    informe = db.query(Informe).filter(Informe.id == informe_id, Informe.examen_id == examen_id).first()
+    if not informe:
+        raise HTTPException(404)
+    db.delete(informe)
+    if not examen.informes or len(examen.informes) == 1:
+        examen.estado = "EN_PROCESO"
+        examen.completado_en = None
+    db.commit()
 
 
 @router.get("/{examen_id}/descargar-imagenes")
@@ -207,6 +225,10 @@ def detalle_caso(caso_id: str, request: Request, db: Session = Depends(get_db), 
                     {"id": img.id, "tipo": img.tipo, "nombre": img.nombre_archivo, "url": get_url(img.ruta)}
                     for img in e.imagenes
                 ],
+                "informes": [
+                    {"id": inf.id, "nombre": inf.ruta_pdf.rsplit("/", 1)[-1], "url": get_url(inf.ruta_pdf), "token": inf.token_publico}
+                    for inf in e.informes
+                ],
             }
             for e in examenes
         ]
@@ -219,12 +241,13 @@ def notificar_derivador(caso_id: str, request: Request, db: Session = Depends(ge
     examenes = _examenes_por_caso(caso_id, radiologo.id, db)
     if not examenes:
         raise HTTPException(404, "Caso no encontrado")
-    if not all(e.informe is not None for e in examenes):
+    if not all(bool(e.informes) for e in examenes):
         raise HTTPException(400, "Faltan informes por subir")
 
     link_portal = _generar_link_portal(examenes[0].derivador, radiologo.slug)
     examenes_con_links = [
-        {"tipo_examen": e.tipo_examen, "link_pdf": get_url(e.informe.ruta_pdf)}
+        {"tipo_examen": e.tipo_examen, "link_pdf": get_url(e.informes[0].ruta_pdf),
+         "links_adicionales": [get_url(i.ruta_pdf) for i in e.informes[1:]]}
         for e in examenes
     ]
     ya_enviado = any(e.notificacion_derivador_enviada for e in examenes)

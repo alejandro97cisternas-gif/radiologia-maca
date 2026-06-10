@@ -3,9 +3,9 @@ import {
   Drawer, Descriptions, Tag, Image, Upload, Button, message,
   Spin, Empty, Tabs, Badge, Typography, Divider,
 } from 'antd'
-import { UploadOutlined, DownloadOutlined, FilePdfOutlined, CheckCircleOutlined } from '@ant-design/icons'
-import type { Caso, ImagenExamen } from '../api/examenes'
-import { getCasoDetalle, subirInforme, patchEstadoCaso, descargarCaso, notificarDerivador } from '../api/examenes'
+import { UploadOutlined, DownloadOutlined, FilePdfOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons'
+import type { Caso, ImagenExamen, InformeExamen } from '../api/examenes'
+import { getCasoDetalle, subirInforme, eliminarInforme, patchEstadoCaso, descargarCaso, notificarDerivador } from '../api/examenes'
 import IncidenciaSection from './IncidenciaSection'
 
 type ExamenConImagenes = {
@@ -16,6 +16,7 @@ type ExamenConImagenes = {
   notificacion_derivador_enviada: boolean
   version: number
   imagenes: ImagenExamen[]
+  informes: InformeExamen[]
 }
 
 const ESTADO_COLOR: Record<string, string> = {
@@ -32,6 +33,7 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
   const [examenes, setExamenes] = useState<ExamenConImagenes[]>([])
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState<number | null>(null)
+  const [deletingInforme, setDeletingInforme] = useState<number | null>(null)
   const [downloadMb, setDownloadMb] = useState<number | null>(null)
   const [enviando, setEnviando] = useState(false)
   const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -65,21 +67,36 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
     finally { setDownloadMb(null) }
   }
 
+  const recargar = async () => {
+    if (!caso) return
+    const data = await getCasoDetalle(caso.caso_id)
+    setExamenes(data.examenes as ExamenConImagenes[])
+  }
+
   const handleSubirPDF = async (examenId: number, file: File) => {
     setUploading(examenId)
     try {
       await subirInforme(examenId, file)
-      if (caso) {
-        const data = await getCasoDetalle(caso.caso_id)
-        setExamenes(data.examenes as ExamenConImagenes[])
-        message.success('Informe subido correctamente')
-      }
+      await recargar()
+      message.success('Informe subido')
     } catch {
       message.error('Error al subir el informe')
     } finally {
       setUploading(null)
     }
     return false
+  }
+
+  const handleEliminarInforme = async (examenId: number, informeId: number) => {
+    setDeletingInforme(informeId)
+    try {
+      await eliminarInforme(examenId, informeId)
+      await recargar()
+    } catch {
+      message.error('Error al eliminar el informe')
+    } finally {
+      setDeletingInforme(null)
+    }
   }
 
   const handleClose = () => {
@@ -235,19 +252,31 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
                   },
                 ]} />
 
-                {!examen.tiene_informe && (
-                  <Upload accept=".pdf" showUploadList={false} beforeUpload={f => handleSubirPDF(examen.id, f)}>
-                    <Button
-                      type="primary"
-                      icon={<UploadOutlined />}
-                      loading={uploading === examen.id}
-                      style={{ marginTop: 12 }}
-                      block
-                    >
-                      Subir informe — {examen.tipo_examen}
-                    </Button>
-                  </Upload>
+                {examen.informes?.length > 0 && (
+                  <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {examen.informes.map(inf => (
+                      <div key={inf.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6 }}>
+                        <FilePdfOutlined style={{ color: '#16a34a', fontSize: 16 }} />
+                        <a href={inf.url} target="_blank" rel="noreferrer" style={{ flex: 1, fontSize: 13, color: '#15803d' }}>{inf.nombre}</a>
+                        <Button
+                          size="small" type="text" danger icon={<DeleteOutlined />}
+                          loading={deletingInforme === inf.id}
+                          onClick={() => handleEliminarInforme(examen.id, inf.id)}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 )}
+                <Upload accept=".pdf" showUploadList={false} beforeUpload={f => handleSubirPDF(examen.id, f)}>
+                  <Button
+                    icon={<UploadOutlined />}
+                    loading={uploading === examen.id}
+                    style={{ marginTop: 10 }}
+                    block
+                  >
+                    {examen.tiene_informe ? 'Agregar otro informe' : `Subir informe — ${examen.tipo_examen}`}
+                  </Button>
+                </Upload>
 
                 <IncidenciaSection examenId={examen.id} />
               </div>

@@ -65,7 +65,7 @@ def carpetas(request: Request, db: Session = Depends(get_db), _=Depends(get_curr
                     "rut": p.rut,
                     "examenes": [
                         {"examen_id": e.id, "tipo_examen": e.tipo_examen, "estado": e.estado,
-                         "creado_en": e.creado_en, "imagenes_count": len(e.imagenes), "tiene_informe": e.informe is not None}
+                         "creado_en": e.creado_en, "imagenes_count": len(e.imagenes), "tiene_informe": bool(e.informes)}
                         for e in p.examenes
                     ],
                 }
@@ -92,7 +92,7 @@ def carpetas_derivador(derivador_id: int, request: Request, db: Session = Depend
                 "rut": p.rut,
                 "examenes": [
                     {"examen_id": e.id, "tipo_examen": e.tipo_examen, "estado": e.estado,
-                     "creado_en": e.creado_en, "imagenes_count": len(e.imagenes), "tiene_informe": e.informe is not None}
+                     "creado_en": e.creado_en, "imagenes_count": len(e.imagenes), "tiene_informe": bool(e.informes)}
                     for e in p.examenes
                 ],
             }
