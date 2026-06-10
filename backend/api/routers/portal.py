@@ -557,7 +557,7 @@ def descargar_informes(
     filename = f"Informes_{rut}_{examen.tipo_examen}.zip"
     return StreamingResponse(
         _generar(), media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"', "Content-Encoding": "identity"},
     )
 
 

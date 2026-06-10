@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from core.database import seed_superadmin
 from core.config import settings
 from core.tenant import TenantMiddleware
@@ -22,6 +23,7 @@ def _allowed_origin(origin: str) -> bool:
     base = settings.BASE_DOMAIN
     return origin.endswith(f".{base}") or origin in (f"https://{base}", f"http://{base}")
 
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(TenantMiddleware)
 app.add_middleware(
     CORSMiddleware,

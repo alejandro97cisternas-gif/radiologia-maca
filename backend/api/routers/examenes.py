@@ -194,7 +194,7 @@ def descargar_imagenes(examen_id: int, request: Request, db: Session = Depends(g
     filename = f"{rut}-{e.tipo_examen}.zip"
     return StreamingResponse(
         _generar(), media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"', "Content-Encoding": "identity"},
     )
 
 
@@ -328,7 +328,7 @@ def descargar_caso(caso_id: str, request: Request, db: Session = Depends(get_db)
 
     return StreamingResponse(
         _generar(), media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{rut}-caso.zip"'},
+        headers={"Content-Disposition": f'attachment; filename="{rut}-caso.zip"', "Content-Encoding": "identity"},
     )
 
 
