@@ -17,6 +17,7 @@ type ExamenConImagenes = {
   version: number
   imagenes: ImagenExamen[]
   informes: InformeExamen[]
+  notas: { id: number; comentario: string; creado_en: string }[]
 }
 
 const ESTADO_COLOR: Record<string, string> = {
@@ -295,6 +296,17 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
                     {examen.tiene_informe ? 'Agregar otro informe' : `Subir informe — ${examen.tipo_examen}`}
                   </Button>
                 </Upload>
+
+                {examen.notas?.length > 0 && (
+                  <div style={{ marginTop: 12, padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6 }}>
+                    <Typography.Text strong style={{ fontSize: 12, color: '#92400e', display: 'block', marginBottom: 6 }}>
+                      Comentario del centro
+                    </Typography.Text>
+                    {examen.notas.map(n => (
+                      <div key={n.id} style={{ fontSize: 13, color: '#78350f', whiteSpace: 'pre-wrap' }}>{n.comentario}</div>
+                    ))}
+                  </div>
+                )}
 
                 <IncidenciaSection examenId={examen.id} />
               </div>

@@ -228,6 +228,10 @@ def detalle_caso(caso_id: str, request: Request, db: Session = Depends(get_db), 
                     {"id": inf.id, "nombre": inf.ruta_pdf.rsplit("/", 1)[-1], "url": get_url(inf.ruta_pdf), "token": inf.token_publico}
                     for inf in e.informes
                 ],
+                "notas": [
+                    {"id": r.id, "comentario": r.comentario, "creado_en": r.creado_en.isoformat()}
+                    for r in e.revisiones if r.tipo_cambio == "nota" and r.comentario
+                ],
             }
             for e in examenes
         ]

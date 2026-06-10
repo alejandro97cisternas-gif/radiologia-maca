@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import {
   portalBuscarPaciente, portalCrearPaciente, portalCrearExamen,
-  portalConfirmarTareas, portalNotificarCaso,
+  portalConfirmarTareas, portalNotificarCaso, portalGuardarNota,
   portalGetTipos,
 } from '../../api/portal'
 import { useUpload } from '../../context/UploadContext'
@@ -607,6 +607,7 @@ export default function PortalNuevoPaciente() {
   }
 
   // ── Paso 2: Confirmar + Notificar (un solo paso) ─────────────────────────────
+  const [comentarioCaso, setComentarioCaso] = useState('')
 
   const notificar = async () => {
     setLoading(true)
@@ -614,6 +615,9 @@ export default function PortalNuevoPaciente() {
       const ids = examenesListos.map(e => e.examen_id!)
       await portalConfirmarTareas(ids)
       await portalNotificarCaso(ids)
+      if (comentarioCaso.trim()) {
+        await Promise.allSettled(ids.map(id => portalGuardarNota(id, comentarioCaso.trim())))
+      }
       setNotificado(true)
       Modal.success({
         title: 'Notificación exitosa',
@@ -800,6 +804,21 @@ export default function PortalNuevoPaciente() {
             <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 16, fontSize: 13 }}>
               Revisa que todo esté correcto. Al notificar, las tareas quedarán asignadas a la doctora.
             </Typography.Text>
+
+            <div style={{ marginBottom: 16 }}>
+              <Typography.Text strong style={{ display: 'block', marginBottom: 6, fontSize: 13 }}>
+                Comentario para la doctora <Typography.Text type="secondary" style={{ fontWeight: 400 }}>(opcional)</Typography.Text>
+              </Typography.Text>
+              <Input.TextArea
+                rows={3}
+                placeholder="Ej: Paciente con implante en sector 2.6, revisar zona apical…"
+                value={comentarioCaso}
+                onChange={e => setComentarioCaso(e.target.value)}
+                maxLength={500}
+                showCount
+              />
+            </div>
+
             <Button
               id="btn-notificar-doctora"
               type="primary" size="large" block
