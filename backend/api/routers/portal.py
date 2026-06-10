@@ -16,7 +16,9 @@ from core.rut_utils import normalizar_rut, limpiar_rut
 from core.storage import (
     guardar_imagen_2d, guardar_dicom, guardar_preview_3d,
     guardar_desde_archivo, key_dicom, key_imagen_2d, key_preview_3d,
-    get_url, dimension, eliminar_carpeta_examen, stream_bytes,
+    get_url, dimension, eliminar_carpeta_examen, stream_bytes, _is_r2,
+    iniciar_multipart, presign_parte, completar_multipart_r2,
+    abortar_multipart_r2, leer_cabecera, eliminar_objeto,
 )
 from fastapi.responses import StreamingResponse
 from core.dicom_utils import es_dicom
@@ -30,6 +32,7 @@ router = APIRouter(prefix="/api/portal", tags=["portal"])
 
 # /tmp es siempre escribible en Docker, independiente de permisos del volumen de datos
 _CHUNK_DIR = Path(tempfile.gettempdir()) / "maca_chunks"
+_MULTIPART_DIR = Path(tempfile.gettempdir()) / "maca_multipart"
 
 
 class IniciarSubidaBody(BaseModel):
@@ -527,6 +530,137 @@ def finalizar_subida_chunked(
     shutil.rmtree(chunk_dir, ignore_errors=True)
 
     return {"id": imagen.id, "nombre": nombre, "subtipo": subtipo, "url": get_url(path)}
+
+
+# ── Upload directo a R2 (multipart presignado) ────────────────────────────────
+
+class PresignMultipartBody(BaseModel):
+    nombre: str
+    total_parts: int
+    subtipo: str
+    ubicacion: str = ""
+    dim_override: Optional[str] = None
+
+
+class PartInfo(BaseModel):
+    part_number: int
+    etag: str
+
+
+class CompletarMultipartBody(BaseModel):
+    upload_id: str
+    parts: list[PartInfo]
+
+
+@router.post("/examenes/{examen_id}/imagenes/presign-multipart", status_code=201)
+def presign_multipart(
+    examen_id: int,
+    body: PresignMultipartBody,
+    derivador: Derivador = Depends(get_portal_derivador),
+    db: Session = Depends(get_db),
+):
+    if not _is_r2():
+        raise HTTPException(501, "Direct upload solo disponible con storage R2")
+
+    examen = db.query(Examen).filter(
+        Examen.id == examen_id, Examen.derivador_id == derivador.id
+    ).first()
+    if not examen:
+        raise HTTPException(404, "Examen no encontrado")
+    if examen.estado == "COMPLETADO":
+        raise HTTPException(400, "No se puede modificar un examen completado")
+
+    tipo = examen.tipo_examen
+    pid = examen.paciente_id
+    pnombre = examen.paciente.nombre_completo
+
+    dim = _resolver_dim(tipo, derivador.radiologo_id, db)
+    if dim == "AMBOS":
+        if body.dim_override not in ("2D", "3D"):
+            raise HTTPException(400, "dim_override='2D' o '3D' requerido")
+        dim = body.dim_override
+
+    rid = derivador.radiologo_id
+    did = derivador.id
+
+    if body.subtipo == "dicom":
+        key = key_dicom(rid, did, pid, pnombre, examen_id, tipo, body.nombre, ubicacion=body.ubicacion, dim=dim)
+        content_type = "application/dicom"
+    elif body.subtipo == "preview":
+        key = key_preview_3d(rid, did, pid, pnombre, examen_id, tipo, body.nombre, dim=dim)
+        content_type = "image/png"
+    else:
+        key = key_imagen_2d(rid, did, pid, pnombre, examen_id, tipo, body.nombre, dim=dim)
+        ext = body.nombre.rsplit(".", 1)[-1].lower()
+        content_type = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}.get(ext, "application/octet-stream")
+
+    upload_id = iniciar_multipart(key, content_type)
+
+    _MULTIPART_DIR.mkdir(exist_ok=True)
+    (_MULTIPART_DIR / f"{upload_id}.json").write_text(json.dumps({
+        "key": key, "examen_id": examen_id, "subtipo": body.subtipo,
+        "dim": dim, "nombre": body.nombre,
+    }))
+
+    parts = [
+        {"part_number": i + 1, "url": presign_parte(key, upload_id, i + 1)}
+        for i in range(body.total_parts)
+    ]
+    return {"upload_id": upload_id, "parts": parts}
+
+
+@router.post("/examenes/{examen_id}/imagenes/completar-multipart", status_code=201)
+def completar_multipart_endpoint(
+    examen_id: int,
+    body: CompletarMultipartBody,
+    derivador: Derivador = Depends(get_portal_derivador),
+    db: Session = Depends(get_db),
+):
+    meta_file = _MULTIPART_DIR / f"{body.upload_id}.json"
+    if not meta_file.exists():
+        raise HTTPException(404, "Upload no encontrado o expirado")
+
+    meta = json.loads(meta_file.read_text())
+    key = meta["key"]
+    subtipo = meta["subtipo"]
+    nombre = meta["nombre"]
+
+    s3_parts = [{"PartNumber": p.part_number, "ETag": p.etag} for p in body.parts]
+
+    try:
+        completar_multipart_r2(key, body.upload_id, s3_parts)
+    except Exception as exc:
+        abortar_multipart_r2(key, body.upload_id)
+        meta_file.unlink(missing_ok=True)
+        raise HTTPException(500, f"Error completando upload: {exc}")
+
+    if subtipo == "dicom":
+        try:
+            header = leer_cabecera(key, 132)
+        except Exception:
+            eliminar_objeto(key)
+            meta_file.unlink(missing_ok=True)
+            raise HTTPException(500, "No se pudo verificar el archivo")
+        if not es_dicom(header):
+            eliminar_objeto(key)
+            meta_file.unlink(missing_ok=True)
+            raise HTTPException(400, "El archivo no es un DICOM válido")
+
+    meta_file.unlink(missing_ok=True)
+
+    db_tipo = {"dicom": "DICOM", "preview": "PREVIEW"}.get(subtipo, "2D")
+    examen = db.query(Examen).filter(
+        Examen.id == examen_id, Examen.derivador_id == derivador.id
+    ).first()
+    if not examen:
+        raise HTTPException(404)
+
+    imagen = ImagenExamen(examen_id=examen_id, tipo=db_tipo, nombre_archivo=nombre, ruta=key)
+    db.add(imagen)
+    db.commit()
+    db.refresh(imagen)
+
+    return {"id": imagen.id, "nombre": nombre, "subtipo": subtipo, "url": get_url(key)}
 
 
 @router.get("/examenes/{examen_id}/informes/descargar")

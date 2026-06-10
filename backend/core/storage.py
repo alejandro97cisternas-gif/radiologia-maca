@@ -224,6 +224,53 @@ def eliminar_carpeta_examen(radiologo_id: int, derivador_id: int, paciente_id: i
             shutil.rmtree(carpeta_path, ignore_errors=True)
 
 
+def iniciar_multipart(key: str, content_type: str = "application/octet-stream") -> str:
+    resp = _r2_client().create_multipart_upload(
+        Bucket=settings.R2_BUCKET, Key=key, ContentType=content_type
+    )
+    return resp["UploadId"]
+
+
+def presign_parte(key: str, upload_id: str, part_number: int, expiry: int = 7200) -> str:
+    return _r2_client().generate_presigned_url(
+        "upload_part",
+        Params={"Bucket": settings.R2_BUCKET, "Key": key, "UploadId": upload_id, "PartNumber": part_number},
+        ExpiresIn=expiry,
+    )
+
+
+def completar_multipart_r2(key: str, upload_id: str, parts: list[dict]) -> None:
+    _r2_client().complete_multipart_upload(
+        Bucket=settings.R2_BUCKET, Key=key, UploadId=upload_id,
+        MultipartUpload={"Parts": parts},
+    )
+
+
+def abortar_multipart_r2(key: str, upload_id: str) -> None:
+    try:
+        _r2_client().abort_multipart_upload(Bucket=settings.R2_BUCKET, Key=key, UploadId=upload_id)
+    except Exception:
+        pass
+
+
+def leer_cabecera(key: str, length: int = 132) -> bytes:
+    if _is_r2():
+        resp = _r2_client().get_object(
+            Bucket=settings.R2_BUCKET, Key=key, Range=f"bytes=0-{length - 1}"
+        )
+        return resp["Body"].read()
+    return (STORAGE_ROOT / key).read_bytes()[:length]
+
+
+def eliminar_objeto(key: str) -> None:
+    if _is_r2():
+        _r2_client().delete_object(Bucket=settings.R2_BUCKET, Key=key)
+    else:
+        path = STORAGE_ROOT / key
+        if path.exists():
+            path.unlink()
+
+
 def get_url(key: str, expiry: int | None = None) -> str:
     """Retorna URL servible para una key. Firmada si R2, estática si local."""
     if _is_r2():

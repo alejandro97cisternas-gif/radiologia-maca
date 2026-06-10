@@ -57,8 +57,9 @@ export const portalSubirImagen = (
 
 // ── Upload chunkeado (para archivos DICOM grandes) ────────────────────────────
 
-const CHUNK_SIZE = 4 * 1024 * 1024 // 4 MB
-const UPLOAD_CONCURRENCY = 3       // chunks en paralelo
+const CHUNK_SIZE = 4 * 1024 * 1024    // 4 MB — fallback chunked (dev local)
+const R2_PART_SIZE = 8 * 1024 * 1024  // 8 MB — partes multipart directo a R2
+const UPLOAD_CONCURRENCY = 6          // partes en paralelo
 
 const portalIniciarSubida = (
   examenId: number,
@@ -86,7 +87,86 @@ const portalFinalizarSubida = (examenId: number, uploadId: string) =>
     { timeout: 30 * 60 * 1000 }, // 30 min para ensamblar + subir a R2
   ).then(r => r.data)
 
-export const portalSubirEnChunks = async (
+// ── Upload de una parte directamente a R2 via URL presignada ─────────────────
+
+const _uploadParteR2 = (
+  url: string,
+  part: Blob,
+  onProgress?: (loaded: number, total: number) => void,
+): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', url)
+    xhr.upload.onprogress = e => onProgress?.(e.loaded, e.total || part.size)
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const etag = xhr.getResponseHeader('ETag') ?? xhr.getResponseHeader('etag')
+        if (!etag) { reject(new Error('Sin ETag en respuesta — revisa CORS ExposeHeaders')); return }
+        resolve(etag)
+      } else {
+        reject(new Error(`R2 HTTP ${xhr.status}`))
+      }
+    }
+    xhr.onerror = () => reject(new Error('Error de red subiendo a R2'))
+    xhr.send(part)
+  })
+
+// ── Upload directo a R2 con multipart presignado ──────────────────────────────
+
+const _subirDirectoR2 = async (
+  examenId: number,
+  file: File,
+  subtipo: 'dicom' | 'preview' | 'imagen',
+  onProgress?: (pct: number) => void,
+  ubicacion = '',
+  dimOverride?: '2D' | '3D',
+) => {
+  const totalParts = Math.max(1, Math.ceil(file.size / R2_PART_SIZE))
+
+  const { upload_id, parts } = await portalApi.post(
+    `/api/portal/examenes/${examenId}/imagenes/presign-multipart`,
+    { nombre: file.name, total_parts: totalParts, subtipo, ubicacion, dim_override: dimOverride },
+  ).then(r => r.data as { upload_id: string; parts: { part_number: number; url: string }[] })
+
+  const partProgress = new Float32Array(totalParts)
+  const etagMap = new Map<number, string>()
+
+  let next = 0
+  const worker = async () => {
+    while (next < totalParts) {
+      const i = next++
+      const start = i * R2_PART_SIZE
+      const etag = await _uploadParteR2(
+        parts[i].url,
+        file.slice(start, start + R2_PART_SIZE),
+        (loaded, total) => {
+          partProgress[i] = loaded / total
+          const done = partProgress.reduce((s, v) => s + v, 0) / totalParts
+          onProgress?.(Math.round(done * 90))
+        },
+      )
+      partProgress[i] = 1
+      etagMap.set(parts[i].part_number, etag)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, totalParts) }, worker))
+
+  const result = await portalApi.post(
+    `/api/portal/examenes/${examenId}/imagenes/completar-multipart`,
+    {
+      upload_id,
+      parts: Array.from(etagMap.entries()).map(([part_number, etag]) => ({ part_number, etag })),
+    },
+    { timeout: 5 * 60 * 1000 },
+  ).then(r => r.data)
+
+  onProgress?.(100)
+  return result
+}
+
+// ── Chunked fallback (solo para storage local en dev) ─────────────────────────
+
+const _subirChunkeado = async (
   examenId: number,
   file: File,
   subtipo: 'dicom' | 'preview' | 'imagen',
@@ -96,34 +176,24 @@ export const portalSubirEnChunks = async (
 ) => {
   const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE))
   const { upload_id } = await portalIniciarSubida(examenId, {
-    nombre: file.name,
-    total_chunks: totalChunks,
-    subtipo,
-    ubicacion,
-    dim_override: dimOverride,
+    nombre: file.name, total_chunks: totalChunks, subtipo, ubicacion, dim_override: dimOverride,
   })
 
-  // Progreso por chunk: 0.0–1.0
   const chunkProgress = new Float32Array(totalChunks)
-
-  const uploadOne = async (i: number) => {
-    const start = i * CHUNK_SIZE
-    await portalSubirChunk(
-      examenId, upload_id, i, file.slice(start, start + CHUNK_SIZE),
-      (loaded, total) => {
-        chunkProgress[i] = loaded / total
-        const done = chunkProgress.reduce((s, v) => s + v, 0) / totalChunks
-        onProgress?.(Math.round(done * 90))
-      },
-    )
-    chunkProgress[i] = 1
-  }
-
-  // Sliding-window: UPLOAD_CONCURRENCY workers consumen la cola en paralelo
   let next = 0
   const worker = async () => {
     while (next < totalChunks) {
-      await uploadOne(next++)
+      const i = next++
+      const start = i * CHUNK_SIZE
+      await portalSubirChunk(
+        examenId, upload_id, i, file.slice(start, start + CHUNK_SIZE),
+        (loaded, total) => {
+          chunkProgress[i] = loaded / total
+          const done = chunkProgress.reduce((s, v) => s + v, 0) / totalChunks
+          onProgress?.(Math.round(done * 90))
+        },
+      )
+      chunkProgress[i] = 1
     }
   }
   await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, totalChunks) }, worker))
@@ -131,6 +201,25 @@ export const portalSubirEnChunks = async (
   const result = await portalFinalizarSubida(examenId, upload_id)
   onProgress?.(100)
   return result
+}
+
+// ── Punto de entrada público: R2 directo con fallback chunked ─────────────────
+
+export const portalSubirEnChunks = async (
+  examenId: number,
+  file: File,
+  subtipo: 'dicom' | 'preview' | 'imagen',
+  onProgress?: (pct: number) => void,
+  ubicacion = '',
+  dimOverride?: '2D' | '3D',
+) => {
+  try {
+    return await _subirDirectoR2(examenId, file, subtipo, onProgress, ubicacion, dimOverride)
+  } catch (err: any) {
+    if (err.response?.status !== 501) throw err
+    // 501 = storage local (dev), usar chunked
+  }
+  return _subirChunkeado(examenId, file, subtipo, onProgress, ubicacion, dimOverride)
 }
 
 export const portalGetImagenes = (examenId: number) =>
