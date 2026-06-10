@@ -65,16 +65,17 @@ def solicitar_acceso(body: SolicitarAccesoBody, db: Session = Depends(get_db)):
     from sqlalchemy import func
 
     email_input = body.email.strip()
-    derivador = db.query(Derivador).filter(
+    derivadores = db.query(Derivador).filter(
         func.lower(Derivador.email) == email_input.lower(),
         Derivador.activo == True,
-    ).first()
-    if not derivador:
+    ).all()
+    if not derivadores:
         return {"mensaje": "Si el email está registrado, recibirás el enlace en breve."}
 
-    radiologo = derivador.radiologo
-    url = f"https://{radiologo.slug}.{settings.BASE_DOMAIN}/portal/acceder/{derivador.portal_slug}?t={derivador.portal_token}"
-    enviar_magic_link_portal(derivador, url, radiologo_nombre=radiologo.nombre_display or "Radiología")
+    for derivador in derivadores:
+        radiologo = derivador.radiologo
+        url = f"https://{radiologo.slug}.{settings.BASE_DOMAIN}/portal/acceder/{derivador.portal_slug}?t={derivador.portal_token}"
+        enviar_magic_link_portal(derivador, url, radiologo_nombre=radiologo.nombre_display or "Radiología")
     return {"mensaje": "Si el email está registrado, recibirás el enlace en breve."}
 
 
