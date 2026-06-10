@@ -205,30 +205,39 @@ def enviar_magic_link_portal(derivador, link: str, radiologo_nombre: str = "Radi
 
 
 def enviar_magic_links_multisede(email: str, sedes: list[dict], radiologo_nombre: str = "Radiología") -> tuple[bool, str]:
-    """Envía un único email con links de acceso para múltiples sedes del mismo centro."""
+    nombres = " y ".join(s["nombre"] for s in sedes)
     sedes_html = ""
     for sede in sedes:
         sedes_html += (
-            f"<div style='margin:16px 0;padding:16px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0;'>"
-            f"<div style='font-weight:700;font-size:14px;color:#1e3a5f;margin-bottom:10px;'>{sede['nombre']}</div>"
-            + _btn("Ingresar", sede['url'])
-            + f"<div style='font-size:11px;color:#94A3B8;margin-top:6px;word-break:break-all;'>{sede['url']}</div>"
+            f"<div style='margin:20px 0;'>"
+            f"<div style='font-weight:700;font-size:14px;color:#1e3a5f;margin-bottom:4px;'>{sede['nombre']}</div>"
+            + _btn("Ingresar al portal", sede['url'])
+            + f"<p style='margin:6px 0 0;font-size:11px;color:#94A3B8;word-break:break-all;'>Si el botón no funciona, copie este enlace en su navegador: {sede['url']}</p>"
             f"</div>"
         )
     body = (
-        _h(f"Sus enlaces de acceso al portal · {radiologo_nombre}")
+        _h(f"Acceso al portal · {nombres}")
         + _p(
-            f"Le compartimos sus enlaces de acceso al portal de <strong>{radiologo_nombre}</strong>. "
-            f"Cada enlace corresponde a una sede diferente — utilice el que corresponda a su centro."
+            f"Estimado/a <strong>{nombres}</strong>, le compartimos sus enlaces de acceso "
+            f"al portal de <strong>{radiologo_nombre}</strong>, donde podrá enviar solicitudes de exámenes "
+            f"y descargar informes en cuanto estén disponibles."
+        )
+        + _p(
+            "<strong>Estos enlaces son permanentes y exclusivos para su clínica.</strong> "
+            "Siempre funcionarán — no tienen fecha de vencimiento. "
+            "Le recomendamos guardarlos como acceso rápido en su navegador para ingresar en cualquier momento sin necesidad de solicitarlos nuevamente."
+        )
+        + _p(
+            "<span style='font-size:12px;color:#64748B;'>"
+            "<strong>¿Cómo guardar el acceso rápido?</strong><br>"
+            "En Chrome o Edge: haga clic en el botón correspondiente a su sede, luego en el ícono ★ de la barra de direcciones y guárdelo como favorito.<br>"
+            "En el celular: abra el enlace y use la opción <em>«Agregar a pantalla de inicio»</em> para tenerlo como ícono."
+            "</span>"
         )
         + sedes_html
-        + _p(
-            "<strong>Estos enlaces son permanentes.</strong> No tienen fecha de vencimiento. "
-            "Le recomendamos guardar el suyo como favorito en el navegador."
-        )
     )
     titulo = f"Radiología · {radiologo_nombre}"
-    return _send(email, f"Sus enlaces de acceso al portal · {radiologo_nombre}", _html(body, titulo), from_name=radiologo_nombre or None)
+    return _send(email, f"Acceso al portal · {nombres}", _html(body, titulo), from_name=radiologo_nombre or None)
 
 
 def enviar_tarea_pendiente_a_doctora(derivador, paciente, examenes: list, radiologo_email: str = "") -> tuple[bool, str]:
