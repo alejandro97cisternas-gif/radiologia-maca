@@ -27,6 +27,8 @@ from modulos.incidencias.models import Incidencia
 from modulos.pacientes.models import Paciente
 from modulos.examenes.models import Examen, ImagenExamen, RevisionExamen, TipoExamenCustom
 from modulos.tarifas.models import TarifaDerivador
+from modulos.notificaciones.models import Notificacion
+from modulos.informes.models import Informe
 
 router = APIRouter(prefix="/api/portal", tags=["portal"])
 
@@ -833,8 +835,14 @@ def eliminar_examen(
     derivador_id = derivador.id
     paciente_id = examen.paciente_id
     nombre_paciente = examen.paciente.nombre_completo
-    db.delete(examen)
-    db.commit()
+    try:
+        db.query(Notificacion).filter(Notificacion.examen_id == examen_id).delete(synchronize_session=False)
+        db.query(Informe).filter(Informe.examen_id == examen_id).delete(synchronize_session=False)
+        db.delete(examen)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Error al eliminar: {str(e)}")
     background_tasks.add_task(eliminar_carpeta_examen, radiologo_id, derivador_id, paciente_id, nombre_paciente, examen_id)
 
 
