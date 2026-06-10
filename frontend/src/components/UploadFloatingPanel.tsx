@@ -22,7 +22,7 @@ export default function UploadFloatingPanel() {
 
   if (tasks.length === 0) return null
 
-  const active = tasks.filter(t => t.estado === 'subiendo').length
+  const active = tasks.filter(t => t.estado === 'subiendo' || t.estado === 'enCola').length
   const hasErrors = tasks.some(t => t.estado === 'error')
   const badgeColor = active > 0 ? '#1d4ed8' : hasErrors ? '#dc2626' : '#16a34a'
 
@@ -84,7 +84,7 @@ export default function UploadFloatingPanel() {
                 fontSize: 11, fontWeight: 600, flexShrink: 0, marginLeft: 8,
                 color: task.estado === 'error' ? '#dc2626' : task.estado === 'completado' ? '#16a34a' : '#2563eb',
               }}>
-                {task.estado === 'completado' ? '✓ Listo' : task.estado === 'error' ? '✗ Error' : `${task.pct}%`}
+                {task.estado === 'completado' ? '✓ Listo' : task.estado === 'error' ? '✗ Error' : task.estado === 'enCola' ? 'En cola' : `${task.pct}%`}
               </span>
             </div>
 
@@ -92,10 +92,13 @@ export default function UploadFloatingPanel() {
               percent={task.pct}
               size="small"
               showInfo={false}
-              status={task.estado === 'error' ? 'exception' : task.estado === 'completado' ? 'success' : 'active'}
+              status={task.estado === 'error' ? 'exception' : task.estado === 'completado' ? 'success' : task.estado === 'enCola' ? 'normal' : 'active'}
             />
 
             {/* Velocidad y ETA */}
+            {task.estado === 'enCola' && (
+              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3 }}>Esperando turno…</div>
+            )}
             {task.estado === 'subiendo' && task.speedKBs > 1 && (
               <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>
                 {fmtSpeed(task.speedKBs)}
