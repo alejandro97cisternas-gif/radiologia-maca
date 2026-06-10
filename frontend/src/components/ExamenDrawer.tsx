@@ -168,13 +168,16 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
     const archivando = examenes.some(e => e.archivo_estado === 'archivando')
     const desarchivando = examenes.some(e => e.archivo_estado === 'desarchivando')
 
-    if (prevArchivandoRef.current && !archivando) {
-      message.success('DICOMs archivados correctamente')
-      onUpdate()
-    }
-    if (prevDesarchivandoRef.current && !desarchivando) {
-      message.success('Caso desarchivado — archivos restaurados')
-      onUpdate()
+    // Only fire completion messages when drawer has real data (not on reset to [])
+    if (examenes.length > 0) {
+      if (prevArchivandoRef.current && !archivando) {
+        message.success('DICOMs archivados correctamente')
+        onUpdate()
+      }
+      if (prevDesarchivandoRef.current && !desarchivando) {
+        message.success('Caso desarchivado — archivos restaurados')
+        onUpdate()
+      }
     }
     prevArchivandoRef.current = archivando
     prevDesarchivandoRef.current = desarchivando
