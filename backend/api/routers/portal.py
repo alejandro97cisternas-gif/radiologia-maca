@@ -5,7 +5,7 @@ import tempfile
 import zipstream as _zs
 from datetime import date as DateType
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
@@ -816,6 +816,7 @@ def guardar_nota(
 @router.delete("/examenes/{examen_id}", status_code=204)
 def eliminar_examen(
     examen_id: int,
+    background_tasks: BackgroundTasks,
     derivador: Derivador = Depends(get_portal_derivador),
     db: Session = Depends(get_db),
 ):
@@ -828,9 +829,13 @@ def eliminar_examen(
     if examen.estado == "COMPLETADO":
         raise HTTPException(400, "No se puede eliminar un examen con informe completado")
 
-    eliminar_carpeta_examen(derivador.radiologo_id, derivador.id, examen.paciente_id, examen.paciente.nombre_completo, examen_id)
+    radiologo_id = derivador.radiologo_id
+    derivador_id = derivador.id
+    paciente_id = examen.paciente_id
+    nombre_paciente = examen.paciente.nombre_completo
     db.delete(examen)
     db.commit()
+    background_tasks.add_task(eliminar_carpeta_examen, radiologo_id, derivador_id, paciente_id, nombre_paciente, examen_id)
 
 
 # ── Confirmar tareas (BORRADOR → PENDIENTE) ──────────────────────────────────
