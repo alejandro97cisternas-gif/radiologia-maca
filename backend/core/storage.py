@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from functools import lru_cache
 from core.config import settings
+from core.slugify import slugify
 
 STORAGE_ROOT = Path(settings.STORAGE_ROOT)
 
@@ -23,9 +24,16 @@ def dimension(tipo_examen: str) -> str:
     return "3D" if tipo_examen in EXAMENES_3D else "2D"
 
 
-def _key_base(radiologo_id: int, derivador_id: int, rut: str, orden_id: int, tipo_examen: str, dim: str | None = None) -> str:
+def _carpeta_paciente(paciente_id: int, nombre_paciente: str) -> str:
+    """Carpeta única y legible: '{id}_{nombre-slug}' — nunca depende del RUT."""
+    return f"{paciente_id}_{slugify(nombre_paciente)[:30]}"
+
+
+def _key_base(radiologo_id: int, derivador_id: int, paciente_id: int, nombre_paciente: str,
+              orden_id: int, tipo_examen: str, dim: str | None = None) -> str:
     d = dim or dimension(tipo_examen)
-    return f"{radiologo_id}/{derivador_id}/{rut}/ordenes/{orden_id}/{d}/{tipo_examen}"
+    carpeta = _carpeta_paciente(paciente_id, nombre_paciente)
+    return f"{radiologo_id}/{derivador_id}/{carpeta}/ordenes/{orden_id}/{d}/{tipo_examen}"
 
 
 # ── Backend R2 ────────────────────────────────────────────────────────────────
@@ -72,20 +80,21 @@ def guardar_desde_archivo(key: str, archivo: Path, content_type: str = "applicat
     return key
 
 
-def key_dicom(radiologo_id: int, derivador_id: int, rut: str, orden_id: int,
-              tipo_examen: str, nombre: str, ubicacion: str = "", dim: str | None = None) -> str:
+def key_dicom(radiologo_id: int, derivador_id: int, paciente_id: int, nombre_paciente: str,
+              orden_id: int, tipo_examen: str, nombre: str,
+              ubicacion: str = "", dim: str | None = None) -> str:
     sub = f"dicom/{ubicacion}/{nombre}" if ubicacion else f"dicom/{nombre}"
-    return f"{_key_base(radiologo_id, derivador_id, rut, orden_id, tipo_examen, dim)}/imagen/{sub}"
+    return f"{_key_base(radiologo_id, derivador_id, paciente_id, nombre_paciente, orden_id, tipo_examen, dim)}/imagen/{sub}"
 
 
-def key_imagen_2d(radiologo_id: int, derivador_id: int, rut: str, orden_id: int,
-                  tipo_examen: str, nombre: str, dim: str | None = None) -> str:
-    return f"{_key_base(radiologo_id, derivador_id, rut, orden_id, tipo_examen, dim)}/imagen/{nombre}"
+def key_imagen_2d(radiologo_id: int, derivador_id: int, paciente_id: int, nombre_paciente: str,
+                  orden_id: int, tipo_examen: str, nombre: str, dim: str | None = None) -> str:
+    return f"{_key_base(radiologo_id, derivador_id, paciente_id, nombre_paciente, orden_id, tipo_examen, dim)}/imagen/{nombre}"
 
 
-def key_preview_3d(radiologo_id: int, derivador_id: int, rut: str, orden_id: int,
-                   tipo_examen: str, nombre: str, dim: str | None = None) -> str:
-    return f"{_key_base(radiologo_id, derivador_id, rut, orden_id, tipo_examen, dim)}/imagen/preview/{nombre}"
+def key_preview_3d(radiologo_id: int, derivador_id: int, paciente_id: int, nombre_paciente: str,
+                   orden_id: int, tipo_examen: str, nombre: str, dim: str | None = None) -> str:
+    return f"{_key_base(radiologo_id, derivador_id, paciente_id, nombre_paciente, orden_id, tipo_examen, dim)}/imagen/preview/{nombre}"
 
 
 def _r2_delete_prefix(prefix: str) -> None:
@@ -136,9 +145,10 @@ def _mime(nombre: str) -> str:
             "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}.get(ext, "application/octet-stream")
 
 
-def guardar_imagen_2d(radiologo_id: int, derivador_id: int, rut: str, orden_id: int, tipo_examen: str,
-                      nombre: str, datos: bytes, dim: str | None = None) -> str:
-    key = f"{_key_base(radiologo_id, derivador_id, rut, orden_id, tipo_examen, dim)}/imagen/{nombre}"
+def guardar_imagen_2d(radiologo_id: int, derivador_id: int, paciente_id: int, nombre_paciente: str,
+                      orden_id: int, tipo_examen: str, nombre: str, datos: bytes,
+                      dim: str | None = None) -> str:
+    key = f"{_key_base(radiologo_id, derivador_id, paciente_id, nombre_paciente, orden_id, tipo_examen, dim)}/imagen/{nombre}"
     if _is_r2():
         _r2_upload(key, datos, _mime(nombre))
     else:
@@ -146,10 +156,11 @@ def guardar_imagen_2d(radiologo_id: int, derivador_id: int, rut: str, orden_id: 
     return key
 
 
-def guardar_dicom(radiologo_id: int, derivador_id: int, rut: str, orden_id: int, tipo_examen: str,
-                  nombre: str, datos: bytes, ubicacion: str = "", dim: str | None = None) -> str:
+def guardar_dicom(radiologo_id: int, derivador_id: int, paciente_id: int, nombre_paciente: str,
+                  orden_id: int, tipo_examen: str, nombre: str, datos: bytes,
+                  ubicacion: str = "", dim: str | None = None) -> str:
     sub = f"dicom/{ubicacion}/{nombre}" if ubicacion else f"dicom/{nombre}"
-    key = f"{_key_base(radiologo_id, derivador_id, rut, orden_id, tipo_examen, dim)}/imagen/{sub}"
+    key = f"{_key_base(radiologo_id, derivador_id, paciente_id, nombre_paciente, orden_id, tipo_examen, dim)}/imagen/{sub}"
     if _is_r2():
         _r2_upload(key, datos, "application/dicom")
     else:
@@ -157,9 +168,10 @@ def guardar_dicom(radiologo_id: int, derivador_id: int, rut: str, orden_id: int,
     return key
 
 
-def guardar_preview_3d(radiologo_id: int, derivador_id: int, rut: str, orden_id: int, tipo_examen: str,
-                       nombre: str, datos: bytes, dim: str | None = None) -> str:
-    key = f"{_key_base(radiologo_id, derivador_id, rut, orden_id, tipo_examen, dim)}/imagen/preview/{nombre}"
+def guardar_preview_3d(radiologo_id: int, derivador_id: int, paciente_id: int, nombre_paciente: str,
+                       orden_id: int, tipo_examen: str, nombre: str, datos: bytes,
+                       dim: str | None = None) -> str:
+    key = f"{_key_base(radiologo_id, derivador_id, paciente_id, nombre_paciente, orden_id, tipo_examen, dim)}/imagen/preview/{nombre}"
     if _is_r2():
         _r2_upload(key, datos, _mime(nombre))
     else:
@@ -167,10 +179,12 @@ def guardar_preview_3d(radiologo_id: int, derivador_id: int, rut: str, orden_id:
     return key
 
 
-def guardar_informe_pdf(radiologo_id: int, derivador_id: int, rut: str, orden_id: int, tipo_examen: str,
-                        nombre: str, datos: bytes, dim: str | None = None) -> str:
+def guardar_informe_pdf(radiologo_id: int, derivador_id: int, paciente_id: int, nombre_paciente: str,
+                        orden_id: int, tipo_examen: str, nombre: str, datos: bytes,
+                        dim: str | None = None) -> str:
     d = dim or dimension(tipo_examen)
-    key = f"{radiologo_id}/{derivador_id}/{rut}/ordenes/{orden_id}/{d}/{tipo_examen}/informe/{nombre}"
+    carpeta = _carpeta_paciente(paciente_id, nombre_paciente)
+    key = f"{radiologo_id}/{derivador_id}/{carpeta}/ordenes/{orden_id}/{d}/{tipo_examen}/informe/{nombre}"
     if _is_r2():
         _r2_upload(key, datos, "application/pdf")
     else:
@@ -178,10 +192,10 @@ def guardar_informe_pdf(radiologo_id: int, derivador_id: int, rut: str, orden_id
     return key
 
 
-def listar_archivos_examen(radiologo_id: int, derivador_id: int, rut: str, orden_id: int,
-                           tipo_examen: str, dim: str | None = None) -> list[dict]:
+def listar_archivos_examen(radiologo_id: int, derivador_id: int, paciente_id: int, nombre_paciente: str,
+                           orden_id: int, tipo_examen: str, dim: str | None = None) -> list[dict]:
     d = dim or dimension(tipo_examen)
-    prefix = f"{_key_base(radiologo_id, derivador_id, rut, orden_id, tipo_examen, d)}/imagen"
+    prefix = f"{_key_base(radiologo_id, derivador_id, paciente_id, nombre_paciente, orden_id, tipo_examen, d)}/imagen"
     keys = _r2_list_prefix(prefix) if _is_r2() else _local_list_prefix(prefix)
 
     result = []
@@ -197,15 +211,17 @@ def listar_archivos_examen(radiologo_id: int, derivador_id: int, rut: str, orden
     return result
 
 
-def eliminar_carpeta_examen(radiologo_id: int, derivador_id: int, rut: str, examen_id: int) -> None:
-    prefix = f"{radiologo_id}/{derivador_id}/{rut}/ordenes/{examen_id}"
+def eliminar_carpeta_examen(radiologo_id: int, derivador_id: int, paciente_id: int,
+                             nombre_paciente: str, examen_id: int) -> None:
+    carpeta = _carpeta_paciente(paciente_id, nombre_paciente)
+    prefix = f"{radiologo_id}/{derivador_id}/{carpeta}/ordenes/{examen_id}"
     if _is_r2():
         _r2_delete_prefix(prefix)
     else:
         import shutil
-        carpeta = STORAGE_ROOT / prefix
-        if carpeta.exists():
-            shutil.rmtree(carpeta, ignore_errors=True)
+        carpeta_path = STORAGE_ROOT / prefix
+        if carpeta_path.exists():
+            shutil.rmtree(carpeta_path, ignore_errors=True)
 
 
 def get_url(key: str, expiry: int | None = None) -> str:

@@ -343,8 +343,9 @@ async def subir_imagen(
     if subtipo == "dicom" and not es_dicom(datos):
         raise HTTPException(400, "El archivo no es un DICOM válido")
 
-    rut = examen.paciente.rut or f"pac{examen.paciente_id}"
     tipo = examen.tipo_examen
+    pid = examen.paciente_id
+    pnombre = examen.paciente.nombre_completo
 
     dim = _resolver_dim(tipo, derivador.radiologo_id, db)
     if dim == "AMBOS":
@@ -355,13 +356,13 @@ async def subir_imagen(
     rid = derivador.radiologo_id
     did = derivador.id
     if subtipo == "dicom":
-        path = guardar_dicom(rid, did, rut, examen_id, tipo, archivo.filename, datos, ubicacion=ubicacion, dim=dim)
+        path = guardar_dicom(rid, did, pid, pnombre, examen_id, tipo, archivo.filename, datos, ubicacion=ubicacion, dim=dim)
         db_tipo = "DICOM"
     elif subtipo == "preview":
-        path = guardar_preview_3d(rid, did, rut, examen_id, tipo, archivo.filename, datos, dim=dim)
+        path = guardar_preview_3d(rid, did, pid, pnombre, examen_id, tipo, archivo.filename, datos, dim=dim)
         db_tipo = "PREVIEW"
     else:
-        path = guardar_imagen_2d(rid, did, rut, examen_id, tipo, archivo.filename, datos, dim=dim)
+        path = guardar_imagen_2d(rid, did, pid, pnombre, examen_id, tipo, archivo.filename, datos, dim=dim)
         db_tipo = "2D"
 
     imagen = ImagenExamen(
@@ -481,8 +482,9 @@ def finalizar_subida_chunked(
         shutil.rmtree(chunk_dir, ignore_errors=True)
         raise HTTPException(404)
 
-    rut = examen.paciente.rut or f"pac{examen.paciente_id}"
     tipo = examen.tipo_examen
+    pid = examen.paciente_id
+    pnombre = examen.paciente.nombre_completo
     ubicacion = meta["ubicacion"]
     dim_override = meta["dim_override"]
 
@@ -498,15 +500,15 @@ def finalizar_subida_chunked(
 
     # Calcular key y tipo DB
     if subtipo == "dicom":
-        key = key_dicom(rid, did, rut, examen_id, tipo, nombre, ubicacion=ubicacion, dim=dim)
+        key = key_dicom(rid, did, pid, pnombre, examen_id, tipo, nombre, ubicacion=ubicacion, dim=dim)
         content_type = "application/dicom"
         db_tipo = "DICOM"
     elif subtipo == "preview":
-        key = key_preview_3d(rid, did, rut, examen_id, tipo, nombre, dim=dim)
+        key = key_preview_3d(rid, did, pid, pnombre, examen_id, tipo, nombre, dim=dim)
         content_type = "image/png"
         db_tipo = "PREVIEW"
     else:
-        key = key_imagen_2d(rid, did, rut, examen_id, tipo, nombre, dim=dim)
+        key = key_imagen_2d(rid, did, pid, pnombre, examen_id, tipo, nombre, dim=dim)
         ext = nombre.rsplit(".", 1)[-1].lower()
         content_type = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}.get(ext, "application/octet-stream")
         db_tipo = "2D"
@@ -690,8 +692,7 @@ def eliminar_examen(
     if examen.estado == "COMPLETADO":
         raise HTTPException(400, "No se puede eliminar un examen con informe completado")
 
-    rut = examen.paciente.rut or f"pac{examen.paciente_id}"
-    eliminar_carpeta_examen(derivador.radiologo_id, derivador.id, rut, examen_id)
+    eliminar_carpeta_examen(derivador.radiologo_id, derivador.id, examen.paciente_id, examen.paciente.nombre_completo, examen_id)
     db.delete(examen)
     db.commit()
 

@@ -127,8 +127,7 @@ async def subir_informe(
     examen = _examen_del_tenant(examen_id, radiologo.id, db)
 
     datos = await archivo.read()
-    rut = examen.paciente.rut or f"pac{examen.paciente_id}"
-    path = guardar_informe_pdf(radiologo.id, examen.derivador_id or 0, rut, examen_id, examen.tipo_examen, archivo.filename, datos)
+    path = guardar_informe_pdf(radiologo.id, examen.derivador_id or 0, examen.paciente_id, examen.paciente.nombre_completo, examen_id, examen.tipo_examen, archivo.filename, datos)
 
     es_primero = not bool(examen.informes)
     informe = Informe(examen_id=examen_id, ruta_pdf=str(path), token_publico=str(uuid.uuid4()))
