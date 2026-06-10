@@ -1,6 +1,6 @@
 import os
 
-workers = int(os.environ.get("WEB_CONCURRENCY", "2"))
+workers = int(os.environ.get("WEB_CONCURRENCY", "4"))
 worker_class = "uvicorn.workers.UvicornWorker"
 bind = "0.0.0.0:8000"
 preload_app = True

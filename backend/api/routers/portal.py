@@ -636,18 +636,6 @@ def completar_multipart_endpoint(
         meta_file.unlink(missing_ok=True)
         raise HTTPException(500, f"Error completando upload: {exc}")
 
-    if subtipo == "dicom":
-        try:
-            header = leer_cabecera(key, 132)
-        except Exception:
-            eliminar_objeto(key)
-            meta_file.unlink(missing_ok=True)
-            raise HTTPException(500, "No se pudo verificar el archivo")
-        if not es_dicom(header):
-            eliminar_objeto(key)
-            meta_file.unlink(missing_ok=True)
-            raise HTTPException(400, "El archivo no es un DICOM válido")
-
     meta_file.unlink(missing_ok=True)
 
     db_tipo = {"dicom": "DICOM", "preview": "PREVIEW"}.get(subtipo, "2D")

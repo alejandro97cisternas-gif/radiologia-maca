@@ -111,59 +111,6 @@ const _uploadParteR2 = (
     xhr.send(part)
   })
 
-// ── Upload directo a R2 con multipart presignado ──────────────────────────────
-
-const _subirDirectoR2 = async (
-  examenId: number,
-  file: File,
-  subtipo: 'dicom' | 'preview' | 'imagen',
-  onProgress?: (pct: number) => void,
-  ubicacion = '',
-  dimOverride?: '2D' | '3D',
-) => {
-  const totalParts = Math.max(1, Math.ceil(file.size / R2_PART_SIZE))
-
-  const { upload_id, parts } = await portalApi.post(
-    `/api/portal/examenes/${examenId}/imagenes/presign-multipart`,
-    { nombre: file.name, total_parts: totalParts, subtipo, ubicacion, dim_override: dimOverride },
-  ).then(r => r.data as { upload_id: string; parts: { part_number: number; url: string }[] })
-
-  const partProgress = new Float32Array(totalParts)
-  const etagMap = new Map<number, string>()
-
-  let next = 0
-  const worker = async () => {
-    while (next < totalParts) {
-      const i = next++
-      const start = i * R2_PART_SIZE
-      const etag = await _uploadParteR2(
-        parts[i].url,
-        file.slice(start, start + R2_PART_SIZE),
-        (loaded, total) => {
-          partProgress[i] = loaded / total
-          const done = partProgress.reduce((s, v) => s + v, 0) / totalParts
-          onProgress?.(Math.round(done * 90))
-        },
-      )
-      partProgress[i] = 1
-      etagMap.set(parts[i].part_number, etag)
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, totalParts) }, worker))
-
-  const result = await portalApi.post(
-    `/api/portal/examenes/${examenId}/imagenes/completar-multipart`,
-    {
-      upload_id,
-      parts: Array.from(etagMap.entries()).map(([part_number, etag]) => ({ part_number, etag })),
-    },
-    { timeout: 5 * 60 * 1000 },
-  ).then(r => r.data)
-
-  onProgress?.(100)
-  return result
-}
-
 // ── Chunked fallback (solo para storage local en dev) ─────────────────────────
 
 const _subirChunkeado = async (
@@ -213,17 +160,60 @@ export const portalSubirEnChunks = async (
   ubicacion = '',
   dimOverride?: '2D' | '3D',
 ) => {
+  // Probe R2: only try direct upload if presign endpoint is available
+  let presignData: { upload_id: string; parts: { part_number: number; url: string }[] } | null = null
   try {
-    return await _subirDirectoR2(examenId, file, subtipo, onProgress, ubicacion, dimOverride)
+    const totalParts = Math.max(1, Math.ceil(file.size / R2_PART_SIZE))
+    presignData = await portalApi.post(
+      `/api/portal/examenes/${examenId}/imagenes/presign-multipart`,
+      { nombre: file.name, total_parts: totalParts, subtipo, ubicacion, dim_override: dimOverride },
+    ).then(r => r.data)
   } catch (err: any) {
     const status = err.response?.status
-    // Solo reintenta con chunked si falló el paso de presign (antes de subir datos).
-    // 501 = storage local, 500 = error backend, 0/null = CORS/red (presign bloqueado).
-    // Si falló durante la subida de partes o al completar, relanza el error.
-    if (status !== 501 && status !== 500 && status !== undefined) throw err
-    console.warn('Direct R2 upload unavailable, falling back to chunked:', err.message)
+    if (status === 501) {
+      // R2 not configured — use chunked
+      return _subirChunkeado(examenId, file, subtipo, onProgress, ubicacion, dimOverride)
+    }
+    console.warn('presign-multipart failed, falling back to chunked:', err.message)
+    return _subirChunkeado(examenId, file, subtipo, onProgress, ubicacion, dimOverride)
   }
-  return _subirChunkeado(examenId, file, subtipo, onProgress, ubicacion, dimOverride)
+
+  // Presign succeeded — complete the R2 upload (do NOT fall back to chunked from here,
+  // parts are already in R2 and chunked would create a duplicate)
+  const totalParts = presignData.parts.length
+  const partProgress = new Float32Array(totalParts)
+  const etagMap = new Map<number, string>()
+  let next = 0
+  const worker = async () => {
+    while (next < totalParts) {
+      const i = next++
+      const start = i * R2_PART_SIZE
+      const etag = await _uploadParteR2(
+        presignData!.parts[i].url,
+        file.slice(start, start + R2_PART_SIZE),
+        (loaded, total) => {
+          partProgress[i] = loaded / total
+          const done = partProgress.reduce((s, v) => s + v, 0) / totalParts
+          onProgress?.(Math.round(done * 90))
+        },
+      )
+      partProgress[i] = 1
+      etagMap.set(presignData!.parts[i].part_number, etag)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, totalParts) }, worker))
+
+  const result = await portalApi.post(
+    `/api/portal/examenes/${examenId}/imagenes/completar-multipart`,
+    {
+      upload_id: presignData.upload_id,
+      parts: Array.from(etagMap.entries()).map(([part_number, etag]) => ({ part_number, etag })),
+    },
+    { timeout: 5 * 60 * 1000 },
+  ).then(r => r.data)
+
+  onProgress?.(100)
+  return result
 }
 
 export const portalGetImagenes = (examenId: number) =>
