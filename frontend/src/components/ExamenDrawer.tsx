@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import {
   Drawer, Descriptions, Tag, Image, Button, message, Modal,
   Spin, Empty, Tabs, Badge, Typography, Divider, Popconfirm,
@@ -124,8 +124,8 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
   const [deletingInforme, setDeletingInforme] = useState<number | null>(null)
   const [downloadMb, setDownloadMb] = useState<number | null>(null)
   const [enviando, setEnviando] = useState(false)
-  const [archivando, setArchivando] = useState(false)
-  const [desarchivando, setDesarchivando] = useState(false)
+  const prevArchivandoRef = useRef(false)
+  const prevDesarchivandoRef = useRef(false)
   const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
   const resolveUrl = (url: string) => url.startsWith('http') ? url : `${BASE}${url}`
 
@@ -157,11 +157,32 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
     finally { setDownloadMb(null) }
   }
 
-  const recargar = async () => {
+  const recargar = useCallback(async () => {
     if (!caso) return
     const data = await getCasoDetalle(caso.caso_id)
     setExamenes(data.examenes as ExamenConImagenes[])
-  }
+  }, [caso?.caso_id])
+
+  // Poll every 3s while archiving/unarchiving is in progress
+  useEffect(() => {
+    const archivando = examenes.some(e => e.archivo_estado === 'archivando')
+    const desarchivando = examenes.some(e => e.archivo_estado === 'desarchivando')
+
+    if (prevArchivandoRef.current && !archivando) {
+      message.success('DICOMs archivados correctamente')
+      onUpdate()
+    }
+    if (prevDesarchivandoRef.current && !desarchivando) {
+      message.success('Caso desarchivado — archivos restaurados')
+      onUpdate()
+    }
+    prevArchivandoRef.current = archivando
+    prevDesarchivandoRef.current = desarchivando
+
+    if ((!archivando && !desarchivando) || !caso) return
+    const timer = setTimeout(() => recargar(), 3000)
+    return () => clearTimeout(timer)
+  }, [examenes, caso?.caso_id])
 
   const handleSubirArchivos = async (examenId: number, files: File[]) => {
     if (!files.length) return
@@ -223,14 +244,11 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
           okText: 'Sí, archivar',
           cancelText: 'Ahora no',
           onOk: async () => {
-            setArchivando(true)
             try {
               await archivarDicomsCaso(caso.caso_id)
-              message.success('DICOMs archivados correctamente')
-              const d = await getCasoDetalle(caso.caso_id)
-              setExamenes(d.examenes as ExamenConImagenes[])
+              await recargar()
+              message.info('Archivando DICOMs en segundo plano…')
             } catch { message.error('Error al archivar DICOMs') }
-            finally { setArchivando(false) }
           },
         })
       }
@@ -243,14 +261,11 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
 
   const handleDesarchivar = async () => {
     if (!caso) return
-    setDesarchivando(true)
     try {
       await desarchivarCaso(caso.caso_id)
-      message.success('Caso desarchivado — archivos restaurados')
-      const data = await getCasoDetalle(caso.caso_id)
-      setExamenes(data.examenes as ExamenConImagenes[])
+      await recargar()
+      message.info('Desarchivando en segundo plano…')
     } catch { message.error('Error al desarchivar') }
-    finally { setDesarchivando(false) }
   }
 
   return (
@@ -292,7 +307,7 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
             <Button
               block
               disabled={!todosConInforme}
-              loading={enviando || archivando}
+              loading={enviando}
               onClick={handleEnviarDerivador}
               style={
                 !todosConInforme
@@ -316,7 +331,7 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
                 cancelText="Cancelar"
                 onConfirm={handleDesarchivar}
               >
-                <Button block loading={desarchivando} icon={<span>📦</span>}>
+                <Button block loading={examenes.some(e => e.archivo_estado === 'desarchivando')} icon={<span>📦</span>}>
                   Desarchivar caso
                 </Button>
               </Popconfirm>
@@ -347,12 +362,10 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
                   <Tag color="blue" style={{ fontWeight: 600 }}>{examen.tipo_examen}</Tag>
                   <Tag color={ESTADO_COLOR[examen.estado]}>{examen.estado}</Tag>
                   {(examen.version ?? 0) > 0 && <Tag color="orange">v{examen.version}</Tag>}
-                  {examen.archivo_estado === 'archivado' && (
-                    <Tag color="default">📦 Archivado</Tag>
-                  )}
-                  {examen.archivo_estado === 'dicom_archivado' && (
-                    <Tag color="default">📦 DICOM archivado</Tag>
-                  )}
+                  {examen.archivo_estado === 'archivado' && <Tag color="default">📦 Archivado</Tag>}
+                  {examen.archivo_estado === 'dicom_archivado' && <Tag color="default">📦 DICOM archivado</Tag>}
+                  {examen.archivo_estado === 'archivando' && <Tag color="processing"><Spin size="small" style={{ marginRight: 4 }} />Archivando…</Tag>}
+                  {examen.archivo_estado === 'desarchivando' && <Tag color="processing"><Spin size="small" style={{ marginRight: 4 }} />Desarchivando…</Tag>}
                   {examen.tiene_informe && (
                     <Tag color="success" icon={<CheckCircleOutlined />}>Informe subido</Tag>
                   )}

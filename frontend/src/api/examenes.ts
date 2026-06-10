@@ -76,7 +76,9 @@ export function agruparEnCasos(examenes: Examen[]): Caso[] {
       tiene_informe: exs.every(e => e.tiene_informe),
       incidencia_estado: exs.find(e => e.incidencia_estado === 'ABIERTA')?.incidencia_estado
         ?? exs.find(e => e.incidencia_estado)?.incidencia_estado ?? null,
-      archivo_estado: exs.some(e => e.archivo_estado === 'archivado') ? 'archivado'
+      archivo_estado: exs.some(e => e.archivo_estado === 'archivando') ? 'archivando'
+        : exs.some(e => e.archivo_estado === 'desarchivando') ? 'desarchivando'
+        : exs.some(e => e.archivo_estado === 'archivado') ? 'archivado'
         : exs.some(e => e.archivo_estado === 'dicom_archivado') ? 'dicom_archivado' : null,
     }
   })

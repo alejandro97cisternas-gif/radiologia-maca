@@ -1,7 +1,7 @@
 import uuid
 import zipstream
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from core.database import get_db
@@ -212,6 +212,20 @@ def _examenes_por_caso(caso_id: str, radiologo_id: int, db: Session) -> list[Exa
     return examenes
 
 
+def _examenes_por_caso_raw(caso_id: str, radiologo_id: int, db: Session) -> list[Examen]:
+    """Version without HTTPException for use in background tasks."""
+    if caso_id.startswith("solo_"):
+        try:
+            exam_id = int(caso_id[5:])
+            return [db.query(Examen).filter(Examen.id == exam_id).first()]
+        except Exception:
+            return []
+    return (db.query(Examen)
+            .join(Derivador, Examen.derivador_id == Derivador.id)
+            .filter(Examen.caso_id == caso_id, Derivador.radiologo_id == radiologo_id)
+            .all())
+
+
 @router.get("/caso/{caso_id}")
 def detalle_caso(caso_id: str, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
     radiologo = get_tenant(request)
@@ -270,26 +284,71 @@ def notificar_derivador(caso_id: str, request: Request, db: Session = Depends(ge
     return {"enviado": ok, "mensaje": msg, "reenvio": ya_enviado, "has_dicom": has_dicom}
 
 
-@router.post("/caso/{caso_id}/archivar-dicoms")
-def archivar_dicoms(caso_id: str, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def _bg_archivar_dicoms(caso_id: str, radiologo_id: int):
     from core.archivado import archivar_dicoms_caso
+    from core.database import SessionLocal
+    db = SessionLocal()
+    try:
+        exs = _examenes_por_caso_raw(caso_id, radiologo_id, db)
+        archivar_dicoms_caso(caso_id, exs, db)
+    except Exception:
+        db.rollback()
+        try:
+            for e in _examenes_por_caso_raw(caso_id, radiologo_id, db):
+                if e.archivo_estado == "archivando":
+                    e.archivo_estado = None
+            db.commit()
+        except Exception:
+            db.rollback()
+    finally:
+        db.close()
+
+
+def _bg_desarchivar(caso_id: str, radiologo_id: int):
+    from core.archivado import desarchivar_caso
+    from core.database import SessionLocal
+    db = SessionLocal()
+    try:
+        exs = _examenes_por_caso_raw(caso_id, radiologo_id, db)
+        desarchivar_caso(caso_id, exs, db)
+    except Exception:
+        db.rollback()
+        try:
+            for e in _examenes_por_caso_raw(caso_id, radiologo_id, db):
+                if e.archivo_estado == "desarchivando":
+                    e.archivo_estado = None
+            db.commit()
+        except Exception:
+            db.rollback()
+    finally:
+        db.close()
+
+
+@router.post("/caso/{caso_id}/archivar-dicoms")
+def archivar_dicoms(caso_id: str, background_tasks: BackgroundTasks, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
     radiologo = get_tenant(request)
     examenes = _examenes_por_caso(caso_id, radiologo.id, db)
     if not examenes:
         raise HTTPException(404, "Caso no encontrado")
-    ok = archivar_dicoms_caso(caso_id, examenes, db)
-    return {"archivado": ok}
+    for e in examenes:
+        if e.archivo_estado not in ("dicom_archivado", "archivado"):
+            e.archivo_estado = "archivando"
+    db.commit()
+    background_tasks.add_task(_bg_archivar_dicoms, caso_id, radiologo.id)
+    return {"archivando": True}
 
 
 @router.post("/caso/{caso_id}/desarchivar")
-def desarchivar(caso_id: str, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    from core.archivado import desarchivar_caso
+def desarchivar(caso_id: str, background_tasks: BackgroundTasks, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
     radiologo = get_tenant(request)
     examenes = _examenes_por_caso(caso_id, radiologo.id, db)
     if not examenes:
         raise HTTPException(404, "Caso no encontrado")
-    ok = desarchivar_caso(caso_id, examenes, db)
-    return {"desarchivado": ok}
+    for e in examenes:
+        e.archivo_estado = "desarchivando"
+    db.commit()
+    background_tasks.add_task(_bg_desarchivar, caso_id, radiologo.id)
+    return {"desarchivando": True}
 
 
 @router.patch("/caso/{caso_id}/estado")
