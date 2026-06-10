@@ -59,10 +59,15 @@ function CasoCard({ caso, onClick, dragging }: { caso: Caso; onClick: () => void
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: caso.fecha_nacimiento ? 2 : 6 }}>
         <div style={{ width: 8, height: 8, borderRadius: '50%', background: caso.derivador_color || '#9ca3af', flexShrink: 0 }} />
         <Typography.Text style={{ fontSize: 12, color: '#6b7280' }}>{caso.derivador}</Typography.Text>
       </div>
+      {caso.fecha_nacimiento && (
+        <Typography.Text style={{ fontSize: 11, color: '#9ca3af', display: 'block', marginBottom: 6 }}>
+          {new Date(caso.fecha_nacimiento + 'T12:00:00').toLocaleDateString('es-CL')}
+        </Typography.Text>
+      )}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

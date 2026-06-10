@@ -5,6 +5,7 @@ export interface Examen {
   caso_id: string | null
   paciente: string
   rut: string | null
+  fecha_nacimiento: string | null
   paciente_id: number
   derivador: string
   derivador_id: number
@@ -24,6 +25,7 @@ export interface Caso {
   caso_id: string
   paciente: string
   rut: string | null
+  fecha_nacimiento: string | null
   paciente_id: number
   derivador: string
   derivador_id: number
@@ -62,6 +64,7 @@ export function agruparEnCasos(examenes: Examen[]): Caso[] {
       caso_id,
       paciente: exs[0].paciente,
       rut: exs[0].rut,
+      fecha_nacimiento: exs[0].fecha_nacimiento,
       paciente_id: exs[0].paciente_id,
       derivador: exs[0].derivador,
       derivador_id: exs[0].derivador_id,

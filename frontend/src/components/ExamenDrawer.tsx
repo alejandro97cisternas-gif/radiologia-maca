@@ -362,8 +362,18 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
           <Descriptions size="small" column={2} style={{ marginBottom: 20 }}>
             <Descriptions.Item label="Clínica">{caso.derivador}</Descriptions.Item>
             <Descriptions.Item label="RUT">{caso.rut || '—'}</Descriptions.Item>
+            <Descriptions.Item label="Fecha de nacimiento">
+              {caso.fecha_nacimiento
+                ? (() => {
+                    const [y, m, d] = caso.fecha_nacimiento.split('-').map(Number)
+                    const hoy = new Date()
+                    let edad = hoy.getFullYear() - y
+                    if (hoy.getMonth() + 1 < m || (hoy.getMonth() + 1 === m && hoy.getDate() < d)) edad--
+                    return `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y} (${edad} años)`
+                  })()
+                : '—'}
+            </Descriptions.Item>
             <Descriptions.Item label="Ingresado">{new Date(caso.creado_en).toLocaleDateString('es-CL')}</Descriptions.Item>
-            <Descriptions.Item label="Exámenes">{examenes.length}</Descriptions.Item>
           </Descriptions>
 
           {examenes.map((examen, idx) => {

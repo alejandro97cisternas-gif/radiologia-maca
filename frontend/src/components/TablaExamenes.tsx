@@ -49,6 +49,7 @@ export default function TablaExamenes({ casos, onOpenCaso }: Props) {
         <div>
           <div style={{ fontWeight: 600, fontSize: 13 }}>{c.paciente}</div>
           {c.rut && <div style={{ color: '#9ca3af', fontSize: 11 }}>{c.rut}</div>}
+          {c.fecha_nacimiento && <div style={{ color: '#9ca3af', fontSize: 11 }}>{new Date(c.fecha_nacimiento + 'T12:00:00').toLocaleDateString('es-CL')}</div>}
         </div>
       ),
     },

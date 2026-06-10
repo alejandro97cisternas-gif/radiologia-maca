@@ -44,6 +44,7 @@ def _serializar(e: Examen, inc_estado: str | None = None) -> dict:
         "caso_id": e.caso_id,
         "paciente": e.paciente.nombre_completo,
         "rut": e.paciente.rut,
+        "fecha_nacimiento": e.paciente.fecha_nacimiento.isoformat() if e.paciente.fecha_nacimiento else None,
         "paciente_id": e.paciente_id,
         "derivador": e.derivador.nombre,
         "derivador_id": e.derivador_id,
