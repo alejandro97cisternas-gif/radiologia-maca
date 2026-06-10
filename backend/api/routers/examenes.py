@@ -274,8 +274,11 @@ def notificar_derivador(caso_id: str, request: Request, db: Session = Depends(ge
         radiologo_nombre=radiologo.nombre_display or "Radiología",
     )
     if ok:
+        now = datetime.now(timezone.utc)
         for e in examenes:
             e.notificacion_derivador_enviada = True
+            e.estado = "COMPLETADO"
+            e.completado_en = now
         db.commit()
     has_dicom = any(
         img.tipo == "DICOM" for e in examenes for img in e.imagenes
