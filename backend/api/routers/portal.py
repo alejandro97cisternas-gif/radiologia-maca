@@ -594,19 +594,20 @@ def presign_multipart(
         ext = body.nombre.rsplit(".", 1)[-1].lower()
         content_type = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}.get(ext, "application/octet-stream")
 
-    upload_id = iniciar_multipart(key, content_type)
+    r2_upload_id = iniciar_multipart(key, content_type)
+    meta_id = str(uuid.uuid4())  # UUID corto como nombre de archivo (UploadId de R2 es >200 chars)
 
     _MULTIPART_DIR.mkdir(exist_ok=True)
-    (_MULTIPART_DIR / f"{upload_id}.json").write_text(json.dumps({
-        "key": key, "examen_id": examen_id, "subtipo": body.subtipo,
-        "dim": dim, "nombre": body.nombre,
+    (_MULTIPART_DIR / f"{meta_id}.json").write_text(json.dumps({
+        "key": key, "r2_upload_id": r2_upload_id, "examen_id": examen_id,
+        "subtipo": body.subtipo, "dim": dim, "nombre": body.nombre,
     }))
 
     parts = [
-        {"part_number": i + 1, "url": presign_parte(key, upload_id, i + 1)}
+        {"part_number": i + 1, "url": presign_parte(key, r2_upload_id, i + 1)}
         for i in range(body.total_parts)
     ]
-    return {"upload_id": upload_id, "parts": parts}
+    return {"upload_id": meta_id, "parts": parts}
 
 
 @router.post("/examenes/{examen_id}/imagenes/completar-multipart", status_code=201)
@@ -622,15 +623,16 @@ def completar_multipart_endpoint(
 
     meta = json.loads(meta_file.read_text())
     key = meta["key"]
+    r2_upload_id = meta["r2_upload_id"]
     subtipo = meta["subtipo"]
     nombre = meta["nombre"]
 
     s3_parts = [{"PartNumber": p.part_number, "ETag": p.etag} for p in body.parts]
 
     try:
-        completar_multipart_r2(key, body.upload_id, s3_parts)
+        completar_multipart_r2(key, r2_upload_id, s3_parts)
     except Exception as exc:
-        abortar_multipart_r2(key, body.upload_id)
+        abortar_multipart_r2(key, r2_upload_id)
         meta_file.unlink(missing_ok=True)
         raise HTTPException(500, f"Error completando upload: {exc}")
 
