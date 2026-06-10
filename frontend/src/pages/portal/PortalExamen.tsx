@@ -279,39 +279,58 @@ export default function PortalExamen() {
           </Typography.Text>
         )}
 
-        {/* Botones informes (uno por cada PDF subido) */}
+        {/* Lista de documentos del informe */}
         {examen?.informes?.length > 0 && (
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {examen.informes.map((inf: { id: number; nombre: string; url: string }, idx: number) => (
-              <Button
-                key={inf.id}
-                icon={<FilePdfOutlined />}
-                type="primary"
-                ghost
-                onClick={() => setPdfUrl(inf.url)}
-              >
-                {examen.informes.length > 1 ? `Informe ${idx + 1}` : 'Ver informe'}
-              </Button>
-            ))}
+          <div style={{ marginLeft: 'auto', width: '100%', marginTop: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {examen.informes.map((inf: { id: number; nombre: string; url: string }) => {
+                const ext = inf.nombre.split('.').pop()?.toLowerCase() ?? ''
+                const esPdf = ext === 'pdf'
+                const esImagen = ['png', 'jpg', 'jpeg'].includes(ext)
+                const icono = esPdf ? '📄' : esImagen ? '🖼' : '📎'
+                const absUrl = resolveUrl(inf.url)
+                return (
+                  <div key={inf.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '8px 12px', background: '#f0fdf4',
+                    border: '1px solid #bbf7d0', borderRadius: 6,
+                  }}>
+                    <span style={{ fontSize: 16 }}>{icono}</span>
+                    <Typography.Text style={{ flex: 1, fontSize: 13, color: '#15803d' }} ellipsis>
+                      {inf.nombre}
+                    </Typography.Text>
+                    <Button size="small" type="link" style={{ padding: '0 6px' }}
+                      onClick={() => esPdf ? setPdfUrl(inf.url) : window.open(absUrl, '_blank')}>
+                      Abrir
+                    </Button>
+                    <Button size="small" type="link" icon={<DownloadOutlined />} style={{ padding: '0 6px' }}
+                      onClick={async () => {
+                        try {
+                          const res = await fetch(absUrl)
+                          const blob = await res.blob()
+                          const a = document.createElement('a')
+                          a.href = URL.createObjectURL(blob)
+                          a.download = inf.nombre
+                          a.click()
+                          URL.revokeObjectURL(a.href)
+                        } catch { message.error('Error al descargar') }
+                      }}>
+                      Descargar
+                    </Button>
+                  </div>
+                )
+              })}
+            </div>
             {examen.informes.length > 1 && (
-              <Button
-                icon={<DownloadOutlined />}
-                loading={descargandoTodos}
+              <Button size="small" icon={<DownloadOutlined />} loading={descargandoTodos}
+                style={{ marginTop: 8 }}
                 onClick={async () => {
-                  setDescargandoTodos(true)
-                  setDescargaMb(0)
+                  setDescargandoTodos(true); setDescargaMb(0)
                   try {
-                    await portalDescargarInformes(
-                      examen.id, examen.paciente_rut || 'SIN_RUT', examen.tipo_examen,
-                      mb => setDescargaMb(mb),
-                    )
-                  } catch {
-                    message.error('Error al descargar los informes')
-                  } finally {
-                    setDescargandoTodos(false)
-                  }
-                }}
-              >
+                    await portalDescargarInformes(examen.id, examen.paciente_rut || 'SIN_RUT', examen.tipo_examen, mb => setDescargaMb(mb))
+                  } catch { message.error('Error al descargar los informes') }
+                  finally { setDescargandoTodos(false) }
+                }}>
                 {descargandoTodos ? `${descargaMb.toFixed(1)} MB...` : 'Descargar todos'}
               </Button>
             )}
