@@ -14,7 +14,7 @@ import {
   portalGetTipos,
 } from '../../api/portal'
 import { useUpload } from '../../context/UploadContext'
-import { readDropItems, filterDicomFromFiles } from '../../utils/dicomUpload'
+import { readDropItems, filterDicomFromFiles, extractDicomFromZip } from '../../utils/dicomUpload'
 import NovexBadge from '../../components/NovexBadge'
 import { normalizarRut } from '../../utils/rut'
 
@@ -59,14 +59,30 @@ function DropZone({
 }) {
   const mainRef = useRef<HTMLInputElement>(null)
   const folderRef = useRef<HTMLInputElement>(null)
+  const zipRef = useRef<HTMLInputElement>(null)
+  const [procesando, setProcesando] = useState(false)
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault()
     if (folderScan && e.dataTransfer.items?.length > 0) {
-      const all = await readDropItems(e.dataTransfer.items)
-      const { dicom, skipped } = await filterDicomFromFiles(all)
-      if (skipped > 0) message.info(`${skipped} archivo${skipped !== 1 ? 's' : ''} omitido${skipped !== 1 ? 's' : ''} (no son DICOM)`)
-      if (dicom.length) onFiles(dicom)
+      setProcesando(true)
+      try {
+        // Detectar si soltaron un ZIP
+        const firstFile = e.dataTransfer.files[0]
+        if (e.dataTransfer.files.length === 1 && firstFile?.name.toLowerCase().endsWith('.zip')) {
+          const { dicom, skipped, total } = await extractDicomFromZip(firstFile)
+          if (skipped > 0) message.info(`${skipped} de ${total} archivos omitidos (no son DICOM)`)
+          if (dicom.length) { message.success(`${dicom.length} DICOMs extraídos del ZIP`); onFiles(dicom) }
+          else message.warning('No se encontraron DICOMs en el ZIP')
+          return
+        }
+        const all = await readDropItems(e.dataTransfer.items)
+        const { dicom, skipped } = await filterDicomFromFiles(all)
+        if (skipped > 0) message.info(`${skipped} archivo${skipped !== 1 ? 's' : ''} omitido${skipped !== 1 ? 's' : ''} (no son DICOM)`)
+        if (dicom.length) onFiles(dicom)
+      } finally {
+        setProcesando(false)
+      }
     } else {
       onFiles(Array.from(e.dataTransfer.files))
     }
@@ -74,10 +90,88 @@ function DropZone({
 
   const handleFolderChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return
-    const { dicom, skipped } = await filterDicomFromFiles(Array.from(e.target.files))
-    if (skipped > 0) message.info(`${skipped} archivo${skipped !== 1 ? 's' : ''} omitido${skipped !== 1 ? 's' : ''} (no son DICOM)`)
-    if (dicom.length) onFiles(dicom)
-    e.target.value = ''
+    setProcesando(true)
+    try {
+      const { dicom, skipped } = await filterDicomFromFiles(Array.from(e.target.files))
+      if (skipped > 0) message.info(`${skipped} archivo${skipped !== 1 ? 's' : ''} omitido${skipped !== 1 ? 's' : ''} (no son DICOM)`)
+      if (dicom.length) onFiles(dicom)
+    } finally {
+      setProcesando(false)
+      e.target.value = ''
+    }
+  }
+
+  const handleZipChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setProcesando(true)
+    try {
+      const { dicom, skipped, total } = await extractDicomFromZip(file)
+      if (skipped > 0) message.info(`${skipped} de ${total} archivos omitidos (no son DICOM)`)
+      if (dicom.length) { message.success(`${dicom.length} DICOMs extraídos del ZIP`); onFiles(dicom) }
+      else message.warning('No se encontraron DICOMs en el ZIP')
+    } finally {
+      setProcesando(false)
+      e.target.value = ''
+    }
+  }
+
+  if (folderScan) {
+    return (
+      <div>
+        <input ref={mainRef} type="file" multiple accept={accept} style={{ display: 'none' }}
+          onChange={e => { if (e.target.files?.length) onFiles(Array.from(e.target.files)); e.target.value = '' }} />
+        <input ref={folderRef} type="file" multiple style={{ display: 'none' }} onChange={handleFolderChange} />
+        <input ref={zipRef} type="file" accept=".zip" style={{ display: 'none' }} onChange={handleZipChange} />
+
+        {/* Zona drag & drop */}
+        <div
+          onDrop={handleDrop}
+          onDragOver={e => e.preventDefault()}
+          style={{
+            border: '2px dashed #a5b4fc', borderRadius: 8, padding: '14px 10px',
+            textAlign: 'center', background: procesando ? '#eef2ff' : '#fafafe',
+            transition: 'background 0.2s',
+          }}
+        >
+          {procesando
+            ? <div style={{ fontSize: 12, color: '#6366f1' }}>Procesando archivos…</div>
+            : <>
+                <InboxOutlined style={{ fontSize: 20, color: '#818cf8' }} />
+                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+                  Arrastra aquí una <strong>carpeta</strong> o un <strong>ZIP</strong>
+                </div>
+              </>
+          }
+        </div>
+
+        {/* Botones explícitos */}
+        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+          <button
+            type="button"
+            onClick={() => { folderRef.current?.setAttribute('webkitdirectory', ''); folderRef.current?.click() }}
+            style={{
+              flex: 1, padding: '6px 0', fontSize: 11, fontWeight: 600,
+              border: '1px solid #c7d2fe', borderRadius: 6, background: '#eef2ff',
+              color: '#4f46e5', cursor: 'pointer',
+            }}
+          >
+            📂 Seleccionar carpeta
+          </button>
+          <button
+            type="button"
+            onClick={() => zipRef.current?.click()}
+            style={{
+              flex: 1, padding: '6px 0', fontSize: 11, fontWeight: 600,
+              border: '1px solid #d1d5db', borderRadius: 6, background: '#f9fafb',
+              color: '#374151', cursor: 'pointer',
+            }}
+          >
+            🗜 Abrir ZIP
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -98,29 +192,6 @@ function DropZone({
       />
       <InboxOutlined style={{ fontSize: 22, color: '#9ca3af' }} />
       <div style={{ fontSize: 12, color: '#6b7280', marginTop: 3 }}>{label}</div>
-      {folderScan && (
-        <>
-          <input
-            ref={folderRef}
-            type="file"
-            multiple
-            style={{ display: 'none' }}
-            onChange={handleFolderChange}
-          />
-          <span
-            style={{ fontSize: 11, color: '#3b82f6', marginTop: 4, display: 'inline-block' }}
-            onClick={e => {
-              e.stopPropagation()
-              if (folderRef.current) {
-                folderRef.current.setAttribute('webkitdirectory', '')
-                folderRef.current.click()
-              }
-            }}
-          >
-            o seleccionar carpeta completa
-          </span>
-        </>
-      )}
     </div>
   )
 }

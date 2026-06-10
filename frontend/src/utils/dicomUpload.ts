@@ -52,3 +52,20 @@ export async function filterDicomFromFiles(files: File[]): Promise<{ dicom: File
   const dicom = checks.filter(c => c.ok).map(c => c.f)
   return { dicom, skipped: files.length - dicom.length }
 }
+
+/** Extrae archivos DICOM de un ZIP. Devuelve los archivos y cuántos se omitieron. */
+export async function extractDicomFromZip(zipFile: File): Promise<{ dicom: File[]; skipped: number; total: number }> {
+  const { unzipSync } = await import('fflate')
+  const buf = await zipFile.arrayBuffer()
+  const entries = unzipSync(new Uint8Array(buf))
+
+  const candidates: File[] = Object.entries(entries)
+    .filter(([name]) => !name.endsWith('/'))  // skip directories
+    .map(([name, data]) => {
+      const basename = name.split('/').pop() || name
+      return new File([data], basename, { type: 'application/octet-stream' })
+    })
+
+  const { dicom, skipped } = await filterDicomFromFiles(candidates)
+  return { dicom, skipped, total: candidates.length }
+}
