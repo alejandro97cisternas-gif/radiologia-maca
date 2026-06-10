@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from core.database import get_db
 from core.dependencies import get_current_user
 from core.tenant import get_tenant
-from core.email_service import enviar_magic_link_portal
+from core.email_service import enviar_magic_link_portal, enviar_magic_links_multisede
 from core.config import settings
 from core.slugify import slugify
 from modulos.derivadores.models import Derivador
@@ -128,8 +128,21 @@ def generar_magic_link(id: int, request: Request, db: Session = Depends(get_db),
     if not derivador:
         raise HTTPException(404, "Derivador no encontrado")
 
+    from sqlalchemy import func
+    radiologo_nombre = radiologo.nombre_display or "Radiología"
+    hermanos = db.query(Derivador).filter(
+        func.lower(Derivador.email) == func.lower(derivador.email),
+        Derivador.radiologo_id == radiologo.id,
+        Derivador.activo == True,
+    ).all() if derivador.email else []
+
+    if len(hermanos) > 1:
+        sedes = [{"nombre": d.nombre, "url": _portal_url(d, radiologo.slug)} for d in hermanos]
+        ok, msg = enviar_magic_links_multisede(derivador.email, sedes, radiologo_nombre=radiologo_nombre)
+        return {"email_enviado": ok, "mensaje": msg, "sedes": len(sedes)}
+
     url = _portal_url(derivador, radiologo.slug)
-    ok, msg = enviar_magic_link_portal(derivador, url, radiologo_nombre=radiologo.nombre_display or "Radiología")
+    ok, msg = enviar_magic_link_portal(derivador, url, radiologo_nombre=radiologo_nombre)
     return {"url": url, "email_enviado": ok, "mensaje": msg}
 
 

@@ -60,7 +60,7 @@ class SolicitarAccesoBody(BaseModel):
 
 @router.post("/solicitar-acceso")
 def solicitar_acceso(body: SolicitarAccesoBody, db: Session = Depends(get_db)):
-    from core.email_service import enviar_magic_link_portal
+    from core.email_service import enviar_magic_link_portal, enviar_magic_links_multisede
     from core.config import settings
     from sqlalchemy import func
 
@@ -72,10 +72,21 @@ def solicitar_acceso(body: SolicitarAccesoBody, db: Session = Depends(get_db)):
     if not derivadores:
         return {"mensaje": "Si el email está registrado, recibirás el enlace en breve."}
 
-    for derivador in derivadores:
+    if len(derivadores) == 1:
+        derivador = derivadores[0]
         radiologo = derivador.radiologo
         url = f"https://{radiologo.slug}.{settings.BASE_DOMAIN}/portal/acceder/{derivador.portal_slug}?t={derivador.portal_token}"
         enviar_magic_link_portal(derivador, url, radiologo_nombre=radiologo.nombre_display or "Radiología")
+    else:
+        radiologo = derivadores[0].radiologo
+        sedes = [
+            {
+                "nombre": d.nombre,
+                "url": f"https://{d.radiologo.slug}.{settings.BASE_DOMAIN}/portal/acceder/{d.portal_slug}?t={d.portal_token}",
+            }
+            for d in derivadores
+        ]
+        enviar_magic_links_multisede(email_input, sedes, radiologo_nombre=radiologo.nombre_display or "Radiología")
     return {"mensaje": "Si el email está registrado, recibirás el enlace en breve."}
 
 

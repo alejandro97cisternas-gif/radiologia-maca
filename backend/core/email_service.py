@@ -204,6 +204,33 @@ def enviar_magic_link_portal(derivador, link: str, radiologo_nombre: str = "Radi
     return _send(derivador.email, f"Su enlace de acceso al portal · {derivador.nombre}", _html(body, titulo), from_name=radiologo_nombre or None)
 
 
+def enviar_magic_links_multisede(email: str, sedes: list[dict], radiologo_nombre: str = "Radiología") -> tuple[bool, str]:
+    """Envía un único email con links de acceso para múltiples sedes del mismo centro."""
+    sedes_html = ""
+    for sede in sedes:
+        sedes_html += (
+            f"<div style='margin:16px 0;padding:16px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0;'>"
+            f"<div style='font-weight:700;font-size:14px;color:#1e3a5f;margin-bottom:10px;'>{sede['nombre']}</div>"
+            + _btn("Ingresar", sede['url'])
+            + f"<div style='font-size:11px;color:#94A3B8;margin-top:6px;word-break:break-all;'>{sede['url']}</div>"
+            f"</div>"
+        )
+    body = (
+        _h(f"Sus enlaces de acceso al portal · {radiologo_nombre}")
+        + _p(
+            f"Le compartimos sus enlaces de acceso al portal de <strong>{radiologo_nombre}</strong>. "
+            f"Cada enlace corresponde a una sede diferente — utilice el que corresponda a su centro."
+        )
+        + sedes_html
+        + _p(
+            "<strong>Estos enlaces son permanentes.</strong> No tienen fecha de vencimiento. "
+            "Le recomendamos guardar el suyo como favorito en el navegador."
+        )
+    )
+    titulo = f"Radiología · {radiologo_nombre}"
+    return _send(email, f"Sus enlaces de acceso al portal · {radiologo_nombre}", _html(body, titulo), from_name=radiologo_nombre or None)
+
+
 def enviar_tarea_pendiente_a_doctora(derivador, paciente, examenes: list, radiologo_email: str = "") -> tuple[bool, str]:
     if not radiologo_email:
         return False, "Email del radiólogo no configurado."

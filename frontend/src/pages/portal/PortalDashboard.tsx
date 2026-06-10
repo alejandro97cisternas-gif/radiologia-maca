@@ -314,7 +314,7 @@ export default function PortalDashboard() {
     <Layout style={{ minHeight: '100vh' }}>
       <Sider width={200} style={{ background: '#1e3a5f' }}>
         <div id="portal-titulo" style={{ padding: '20px 16px', color: '#fff', fontWeight: 700, fontSize: 14 }}>
-          Portal Clínica
+          {info?.nombre ?? 'Portal Clínica'}
         </div>
         <Menu
           theme="dark"
