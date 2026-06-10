@@ -226,3 +226,15 @@ def get_bytes(key: str) -> bytes:
         resp = _r2_client().get_object(Bucket=settings.R2_BUCKET, Key=key)
         return resp["Body"].read()
     return (STORAGE_ROOT / key).read_bytes()
+
+
+def stream_bytes(key: str, chunk_size: int = 1024 * 1024):
+    """Genera chunks del archivo sin cargarlo en RAM — para ZIPs en streaming."""
+    if _is_r2():
+        resp = _r2_client().get_object(Bucket=settings.R2_BUCKET, Key=key)
+        yield from resp["Body"].iter_chunks(chunk_size)
+    else:
+        path = STORAGE_ROOT / key
+        with open(path, "rb") as f:
+            while chunk := f.read(chunk_size):
+                yield chunk

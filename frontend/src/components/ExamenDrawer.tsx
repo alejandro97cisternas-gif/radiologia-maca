@@ -32,7 +32,7 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
   const [examenes, setExamenes] = useState<ExamenConImagenes[]>([])
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState<number | null>(null)
-  const [downloading, setDownloading] = useState(false)
+  const [downloadMb, setDownloadMb] = useState<number | null>(null)
   const [enviando, setEnviando] = useState(false)
   const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
   const resolveUrl = (url: string) => url.startsWith('http') ? url : `${BASE}${url}`
@@ -59,10 +59,10 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
 
   const handleDescargar = async () => {
     if (!caso) return
-    setDownloading(true)
-    try { await descargarCaso(caso) }
+    setDownloadMb(0)
+    try { await descargarCaso(caso, mb => setDownloadMb(mb)) }
     catch { message.error('Error al descargar imágenes') }
-    finally { setDownloading(false) }
+    finally { setDownloadMb(null) }
   }
 
   const handleSubirPDF = async (examenId: number, file: File) => {
@@ -118,10 +118,21 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
       width={720}
       extra={
         caso ? (
-          <Button icon={<DownloadOutlined />} loading={downloading} onClick={handleDescargar}
-            disabled={(caso.imagenes_count ?? 0) === 0}>
-            Descargar imágenes
-          </Button>
+          downloadMb !== null ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 180 }}>
+              <span style={{ fontSize: 12, color: '#6b7280', whiteSpace: 'nowrap' }}>
+                Descargando {downloadMb.toFixed(1)} MB...
+              </span>
+              <div style={{ flex: 1, height: 4, background: '#e5e7eb', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ height: '100%', background: '#3b82f6', borderRadius: 2, animation: 'pulse 1.5s ease-in-out infinite', width: '100%' }} />
+              </div>
+            </div>
+          ) : (
+            <Button icon={<DownloadOutlined />} onClick={handleDescargar}
+              disabled={(caso.imagenes_count ?? 0) === 0}>
+              Descargar imágenes
+            </Button>
+          )
         ) : null
       }
       title={

@@ -126,14 +126,41 @@ export const getCasoDetalle = (casoId: string) =>
 export const patchEstadoCaso = (casoId: string, estado: string) =>
   api.patch(`/api/examenes/caso/${encodeURIComponent(casoId)}/estado`, { estado }).then(r => r.data)
 
-export const descargarCaso = async (caso: Caso): Promise<void> => {
-  const res = await api.get(`/api/examenes/caso/${encodeURIComponent(caso.caso_id)}/descargar`, { responseType: 'blob' })
-  const url = URL.createObjectURL(res.data)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${caso.rut ?? 'paciente'}-${caso.examenes.length > 1 ? 'caso' : caso.examenes[0]?.tipo_examen ?? 'imagenes'}.zip`
-  document.body.appendChild(a); a.click(); document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+export const descargarCaso = (caso: Caso, onProgress?: (mb: number) => void): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const token = localStorage.getItem('token')
+    const slug = (() => {
+      const host = window.location.hostname
+      const base = import.meta.env.VITE_BASE_DOMAIN || 'localhost'
+      if (host.endsWith(`.${base}`)) return host.slice(0, -(base.length + 1))
+      return localStorage.getItem('dev_tenant_slug')
+    })()
+
+    const xhr = new XMLHttpRequest()
+    xhr.open('GET', `${BASE}/api/examenes/caso/${encodeURIComponent(caso.caso_id)}/descargar`)
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    if (slug) xhr.setRequestHeader('X-Tenant-Slug', slug)
+    xhr.responseType = 'blob'
+
+    xhr.onprogress = e => onProgress?.(e.loaded / (1024 * 1024))
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const url = URL.createObjectURL(xhr.response)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${caso.rut ?? 'paciente'}-${caso.examenes.length > 1 ? 'caso' : caso.examenes[0]?.tipo_examen ?? 'imagenes'}.zip`
+        document.body.appendChild(a); a.click(); document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        resolve()
+      } else {
+        reject(new Error(`HTTP ${xhr.status}`))
+      }
+    }
+    xhr.onerror = () => reject(new Error('Error de red'))
+    xhr.send()
+  })
 }
 
 export const notificarDerivador = (casoId: string) =>

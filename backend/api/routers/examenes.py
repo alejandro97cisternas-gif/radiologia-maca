@@ -1,6 +1,5 @@
-import io
 import uuid
-import zipfile
+import zipstream
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
@@ -8,7 +7,7 @@ from sqlalchemy.orm import Session
 from core.database import get_db
 from core.dependencies import get_current_user
 from core.tenant import get_tenant
-from core.storage import guardar_informe_pdf, get_url, get_bytes
+from core.storage import guardar_informe_pdf, get_url, get_bytes, stream_bytes
 from core.email_service import enviar_informe_listo_a_derivador, enviar_caso_listo_a_derivador
 from core.config import settings
 from modulos.examenes.models import Examen, TipoExamenCustom
@@ -162,20 +161,22 @@ def descargar_imagenes(examen_id: int, request: Request, db: Session = Depends(g
     radiologo = get_tenant(request)
     e = _examen_del_tenant(examen_id, radiologo.id, db)
     rut = e.paciente.rut or f"pac{e.paciente_id}"
+    imagenes = list(e.imagenes)
 
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for img in e.imagenes:
+    def _generar():
+        zf = zipstream.ZipFile(mode="w", compression=zipstream.ZIP_STORED, allowZip64=True)
+        for img in imagenes:
             nombre = img.ruta.rsplit("/", 1)[-1]
             try:
-                zf.writestr(nombre, get_bytes(img.ruta))
+                zf.write_iter(nombre, stream_bytes(img.ruta))
             except Exception:
                 pass
-    buf.seek(0)
+        yield from zf
 
+    filename = f"{rut}-{e.tipo_examen}.zip"
     return StreamingResponse(
-        buf, media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{rut}-{e.tipo_examen}.zip"'},
+        _generar(), media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -268,45 +269,42 @@ def descargar_caso(caso_id: str, request: Request, db: Session = Depends(get_db)
             conteo[img.ruta.rsplit("/", 1)[-1]] += 1
     compartidas = {n for n, c in conteo.items() if c > 1}
 
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+    examenes_snap = [(e, list(e.imagenes)) for e in examenes]
+
+    def _generar():
+        zf = zipstream.ZipFile(mode="w", compression=zipstream.ZIP_STORED, allowZip64=True)
         escritas_compartidas: set[str] = set()
-        for examen in examenes:
+        for examen, imgs in examenes_snap:
             folder = examen.tipo_examen.replace("/", "-")[:40]
             propias, refs_compartidas = [], []
-            for img in examen.imagenes:
+            for img in imgs:
                 nombre = img.ruta.rsplit("/", 1)[-1]
                 if nombre in compartidas:
                     refs_compartidas.append(nombre)
                     if nombre not in escritas_compartidas:
                         try:
-                            zf.writestr(f"imagenes_compartidas/{nombre}", get_bytes(img.ruta))
+                            zf.write_iter(f"imagenes_compartidas/{nombre}", stream_bytes(img.ruta))
                             escritas_compartidas.add(nombre)
                         except Exception:
                             pass
                 else:
-                    propias.append((nombre, img))
+                    propias.append(nombre)
                     try:
-                        zf.writestr(f"{folder}/{nombre}", get_bytes(img.ruta))
+                        zf.write_iter(f"{folder}/{nombre}", stream_bytes(img.ruta))
                     except Exception:
                         pass
-
-            # info.txt de cada examen
             lineas = [f"Tipo de examen: {examen.tipo_examen}"]
             if refs_compartidas:
-                lineas.append("\nImágenes compartidas con otros exámenes del caso:")
-                lineas.append("  → carpeta 'imagenes_compartidas/'")
-                for n in refs_compartidas:
-                    lineas.append(f"  • {n}")
+                lineas.append("\nImágenes compartidas:\n  → carpeta 'imagenes_compartidas/'")
+                lineas.extend(f"  • {n}" for n in refs_compartidas)
             if propias:
-                lineas.append("\nImágenes exclusivas de este examen:")
-                for n, _ in propias:
-                    lineas.append(f"  • {n}")
+                lineas.append("\nImágenes exclusivas:")
+                lineas.extend(f"  • {n}" for n in propias)
             zf.writestr(f"{folder}/info.txt", "\n".join(lineas))
+        yield from zf
 
-    buf.seek(0)
     return StreamingResponse(
-        buf, media_type="application/zip",
+        _generar(), media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{rut}-caso.zip"'},
     )
 
