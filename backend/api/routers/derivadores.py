@@ -111,6 +111,16 @@ def _portal_url(derivador: Derivador, radiologo_slug: str) -> str:
     return f"https://{radiologo_slug}.{settings.BASE_DOMAIN}/portal/acceder/{derivador.portal_slug}?t={derivador.portal_token}"
 
 
+@router.post("/{id}/activar", status_code=204)
+def activar(id: int, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    radiologo = get_tenant(request)
+    derivador = db.query(Derivador).filter(Derivador.id == id, Derivador.radiologo_id == radiologo.id).first()
+    if not derivador:
+        raise HTTPException(404, "Derivador no encontrado")
+    derivador.activo = True
+    db.commit()
+
+
 @router.post("/{id}/magic-link")
 def generar_magic_link(id: int, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
     radiologo = get_tenant(request)

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Table, Button, Modal, Form, Input, Select, Space, Tag, message, Popconfirm, Typography, Tooltip, Alert, ColorPicker } from 'antd'
-import { PlusOutlined, LinkOutlined, EditOutlined, StopOutlined } from '@ant-design/icons'
-import { getDerivadores, crearDerivador, actualizarDerivador, eliminarDerivador, generarMagicLink } from '../api/derivadores'
+import { PlusOutlined, LinkOutlined, EditOutlined, StopOutlined, CheckCircleOutlined } from '@ant-design/icons'
+import { getDerivadores, crearDerivador, actualizarDerivador, eliminarDerivador, activarDerivador, generarMagicLink } from '../api/derivadores'
 import type { Derivador } from '../api/derivadores'
 import { useTutorialDerivadores } from '../hooks/useTutorialDoctora'
 
@@ -56,6 +56,12 @@ export default function DerivadoresPage() {
     load()
   }
 
+  const handleActivar = async (id: number) => {
+    await activarDerivador(id)
+    message.success('Derivador activado')
+    load()
+  }
+
   const handleMagicLink = async (id: number) => {
     try {
       const res = await generarMagicLink(id)
@@ -93,9 +99,13 @@ export default function DerivadoresPage() {
           <Tooltip title="Generar link portal">
             <Button size="small" icon={<LinkOutlined />} onClick={() => handleMagicLink(d.id)} />
           </Tooltip>
-          {d.activo && (
+          {d.activo ? (
             <Popconfirm title="¿Desactivar derivador?" onConfirm={() => handleDesactivar(d.id)}>
-              <Button size="small" danger icon={<StopOutlined />} />
+              <Tooltip title="Desactivar"><Button size="small" danger icon={<StopOutlined />} /></Tooltip>
+            </Popconfirm>
+          ) : (
+            <Popconfirm title="¿Reactivar derivador?" onConfirm={() => handleActivar(d.id)}>
+              <Tooltip title="Reactivar"><Button size="small" icon={<CheckCircleOutlined />} style={{ color: '#16a34a', borderColor: '#16a34a' }} /></Tooltip>
             </Popconfirm>
           )}
         </Space>
