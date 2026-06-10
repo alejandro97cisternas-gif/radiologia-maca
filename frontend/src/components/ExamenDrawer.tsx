@@ -267,7 +267,7 @@ export default function ExamenDrawer({ caso, onClose, onUpdate }: Props) {
                     ))}
                   </div>
                 )}
-                <Upload accept=".pdf" showUploadList={false} beforeUpload={f => handleSubirPDF(examen.id, f)}>
+                <Upload accept=".pdf,.png,.jpg,.jpeg" showUploadList={false} beforeUpload={f => handleSubirPDF(examen.id, f)}>
                   <Button
                     icon={<UploadOutlined />}
                     loading={uploading === examen.id}
