@@ -216,8 +216,12 @@ export const portalSubirEnChunks = async (
   try {
     return await _subirDirectoR2(examenId, file, subtipo, onProgress, ubicacion, dimOverride)
   } catch (err: any) {
-    if (err.response?.status !== 501) throw err
-    // 501 = storage local (dev), usar chunked
+    const status = err.response?.status
+    // Solo reintenta con chunked si falló el paso de presign (antes de subir datos).
+    // 501 = storage local, 500 = error backend, 0/null = CORS/red (presign bloqueado).
+    // Si falló durante la subida de partes o al completar, relanza el error.
+    if (status !== 501 && status !== 500 && status !== undefined) throw err
+    console.warn('Direct R2 upload unavailable, falling back to chunked:', err.message)
   }
   return _subirChunkeado(examenId, file, subtipo, onProgress, ubicacion, dimOverride)
 }
