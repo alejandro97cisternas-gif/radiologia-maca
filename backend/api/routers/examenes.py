@@ -265,8 +265,10 @@ def notificar_derivador(caso_id: str, request: Request, db: Session = Depends(ge
 
     link_portal = _generar_link_portal(examenes[0].derivador, radiologo.slug)
     examenes_con_links = [
-        {"tipo_examen": e.tipo_examen, "link_pdf": get_url(e.informes[0].ruta_pdf),
-         "links_adicionales": [get_url(i.ruta_pdf) for i in e.informes[1:]]}
+        {
+            "tipo_examen": e.tipo_examen,
+            "archivos": [i.ruta_pdf.rsplit("/", 1)[-1] for i in e.informes],
+        }
         for e in examenes
     ]
     ya_enviado = any(e.notificacion_derivador_enviada for e in examenes)

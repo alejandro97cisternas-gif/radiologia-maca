@@ -310,16 +310,16 @@ def enviar_honorarios(derivador, periodo: str, pdf_bytes: bytes, radiologo_nombr
     )
 
 
-def _fila_informe(tipo_examen: str, link_pdf: str) -> str:
-    return f"""<tr>
-  <td style="padding:7px 12px;font-size:12px;color:#0F172A;border-bottom:1px solid #E2E8F0;">{tipo_examen}</td>
-  <td style="padding:7px 12px;border-bottom:1px solid #E2E8F0;text-align:right;">
-    <a href="{link_pdf}" style="display:inline-block;padding:5px 14px;background:#1e3a5f;color:#FFF;
-       font-size:11px;font-weight:700;text-decoration:none;font-family:Arial,sans-serif;">
-      Descargar PDF →
-    </a>
-  </td>
-</tr>"""
+def _seccion_examen(tipo_examen: str, archivos: list[str]) -> str:
+    items = "".join(
+        f"<li style='margin-bottom:3px;'>{a}</li>" for a in archivos
+    )
+    return (
+        f"<div style='margin-top:12px;padding:12px 16px;border:1px solid #E2E8F0;border-radius:4px;'>"
+        f"<div style='font-weight:700;color:#1e3a5f;font-size:13px;margin-bottom:6px;'>{tipo_examen}</div>"
+        f"<ul style='margin:0;padding-left:18px;color:#475569;font-size:12px;line-height:1.7;'>{items}</ul>"
+        f"</div>"
+    )
 
 
 def enviar_caso_listo_a_derivador(
@@ -327,17 +327,19 @@ def enviar_caso_listo_a_derivador(
 ) -> tuple[bool, str]:
     if not derivador.email:
         return False, "Derivador sin email."
-    filas = [_fila_informe(e["tipo_examen"], e["link_pdf"]) for e in examenes]
-    tabla = (
-        "<table cellpadding='0' cellspacing='0' width='100%' "
-        "style='margin-top:20px;border:1px solid #E2E8F0;border-collapse:collapse;'>"
-        + "".join(filas) + "</table>"
+    secciones = "".join(
+        _seccion_examen(e["tipo_examen"], e.get("archivos", []))
+        for e in examenes
     )
     body = (
         _h("Informes listos")
         + _p(f"centro <strong>{derivador.nombre}</strong>, los informes de su paciente "
              f"<strong>{paciente.nombre_completo}</strong> están disponibles.")
-        + tabla
+        + _table(
+            _row("Paciente", paciente.nombre_completo),
+            _row("RUT", paciente.rut or "-"),
+        )
+        + secciones
         + _btn("Ver en el portal", link_portal)
     )
     titulo = f"Radiología · {radiologo_nombre}" if radiologo_nombre else "Radiología"
