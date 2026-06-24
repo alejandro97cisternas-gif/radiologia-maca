@@ -11,7 +11,7 @@ import dayjs from 'dayjs'
 import {
   portalBuscarPaciente, portalCrearPaciente, portalCrearExamen,
   portalConfirmarTareas, portalNotificarCaso, portalGuardarNota,
-  portalGetTipos,
+  portalGetTipos, portalEliminarExamen,
 } from '../../api/portal'
 import { useUpload } from '../../context/UploadContext'
 import { readDropItems, filterDicomFromFiles, extractDicomFromZip } from '../../utils/dicomUpload'
@@ -538,8 +538,28 @@ export default function PortalNuevoPaciente() {
   }, [])
 
   const deleteCard = useCallback((uid: string) => {
-    setExamenes(prev => prev.filter(c => c.uid !== uid))
-  }, [])
+    const card = examenes.find(c => c.uid === uid)
+    if (!card?.examen_id) {
+      setExamenes(prev => prev.filter(c => c.uid !== uid))
+      return
+    }
+    Modal.confirm({
+      title: '¿Eliminar este examen?',
+      content: `Se eliminará "${card.tipo_examen || 'examen'}" y todas sus imágenes.`,
+      okText: 'Eliminar',
+      okButtonProps: { danger: true },
+      cancelText: 'Cancelar',
+      onOk: async () => {
+        try {
+          await portalEliminarExamen(card.examen_id!)
+          setExamenes(prev => prev.filter(c => c.uid !== uid))
+          message.success('Examen eliminado')
+        } catch (err: any) {
+          message.error(err?.response?.data?.detail || 'No se pudo eliminar el examen')
+        }
+      },
+    })
+  }, [examenes])
 
   const agregarExamen = () => {
     setExamenes(prev => [

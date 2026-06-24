@@ -476,16 +476,34 @@ export default function PortalDashboard() {
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 8 }}>
         {casoModal?.examenes.map((e: any) => (
-          <Button
-            key={e.id}
-            block
-            icon={<PictureOutlined />}
-            onClick={() => { setCasoModal(null); navigate(`/portal/examen/${e.id}`) }}
-            style={{ textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}
-          >
-            <Tag color="blue" style={{ margin: 0 }}>{e.tipo_examen}</Tag>
-            <Tag color={ESTADO_COLOR[e.estado]}>{e.estado}</Tag>
-          </Button>
+          <div key={e.id} style={{ display: 'flex', gap: 6 }}>
+            <Button
+              block
+              icon={<PictureOutlined />}
+              onClick={() => { setCasoModal(null); navigate(`/portal/examen/${e.id}`) }}
+              style={{ textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}
+            >
+              <Tag color="blue" style={{ margin: 0 }}>{e.tipo_examen}</Tag>
+              <Tag color={ESTADO_COLOR[e.estado]}>{e.estado}</Tag>
+            </Button>
+            {e.estado !== 'COMPLETADO' && (
+              <Popconfirm
+                title={`¿Eliminar "${e.tipo_examen}"?`}
+                description="Se borrarán sus imágenes."
+                okText="Eliminar" cancelText="Cancelar" okButtonProps={{ danger: true }}
+                onConfirm={async () => {
+                  await handleEliminar(e.id)
+                  setCasoModal((prev: any) => {
+                    if (!prev) return null
+                    const rest = prev.examenes.filter((ex: any) => ex.id !== e.id)
+                    return rest.length ? { ...prev, examenes: rest } : null
+                  })
+                }}
+              >
+                <Button size="small" danger icon={<DeleteOutlined />} />
+              </Popconfirm>
+            )}
+          </div>
         ))}
       </div>
     </Modal>
