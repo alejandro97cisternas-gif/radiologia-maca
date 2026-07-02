@@ -466,22 +466,19 @@ export default function HonorariosPage() {
     }
   }
 
-  const handleDescargarCSV = (id: number) => {
+  const handleDescargarCSV = async (id: number) => {
     const det = detalles[id]?.detalle || []
     if (!det.length) { message.warning('No hay datos para este período'); return }
     const nombre = derivadores.find(d => d.id === id)?.nombre || String(id)
+    const { utils, writeFile } = await import('xlsx')
     const filas = [
       ['Fecha', 'Paciente', 'Tipo de examen', 'Precio base', 'Descuento', 'Precio final'],
       ...det.map((e: any) => [e.fecha, e.paciente, e.tipo_examen, e.precio_base, e.descuento, e.precio]),
     ]
-    const csv = filas.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `honorarios_${nombre.replace(/\s+/g, '_')}_${periodo}.csv`
-    document.body.appendChild(a); a.click(); document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    const ws = utils.aoa_to_sheet(filas)
+    const wb = utils.book_new()
+    utils.book_append_sheet(wb, ws, 'Honorarios')
+    writeFile(wb, `honorarios_${nombre.replace(/\s+/g, '_')}_${periodo}.xlsx`)
   }
 
   const handleEnviar = async (id: number) => {
@@ -682,7 +679,7 @@ export default function HonorariosPage() {
                     onClick={() => handleDescargarCSV(d.id)}
                     disabled={!detalle?.detalle?.length}
                   >
-                    CSV
+                    Excel
                   </Button>
                   <Button
                     id="btn-enviar-clinica"
