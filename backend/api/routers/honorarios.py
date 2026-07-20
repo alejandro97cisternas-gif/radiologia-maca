@@ -156,6 +156,15 @@ class TipoExamenCreate(BaseModel):
     categoria: str | None = None
 
 
+@router.post("/sync-tipos", status_code=200)
+def sync_tipos_examen(request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    """Sincroniza categorías y agrega tipos faltantes del catálogo base para este radiólogo."""
+    from core.seed_examenes import seed_tipos_examen
+    radiologo = get_tenant(request)
+    seed_tipos_examen(radiologo.id, db)
+    return {"ok": True}
+
+
 @router.post("/tipos-examen", status_code=201)
 def crear_tipo_examen(body: TipoExamenCreate, request: Request, db: Session = Depends(get_db), _=Depends(get_current_user)):
     radiologo = get_tenant(request)

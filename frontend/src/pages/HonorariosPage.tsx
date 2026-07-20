@@ -10,7 +10,7 @@ import {
   getHonorariosGlobal, getHonorariosDerivador, generarHonorarios,
   enviarHonorarios, previewHonorarios,
   getTarifas, crearTarifaItem, eliminarTarifaItem,
-  getTiposExamen,
+  getTiposExamen, syncTiposExamen,
   getConvenios, crearConvenio, eliminarConvenio,
 } from '../api/honorarios'
 import type { ConvenioItem } from '../api/honorarios'
@@ -57,7 +57,7 @@ function TarifasEditor({ derivadorId, moneda }: { derivadorId: number; moneda: s
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { cargar() }, [derivadorId])
+  useEffect(() => { syncTiposExamen().catch(() => {}).finally(cargar) }, [derivadorId])
 
   const tipoOptions = useMemo(() => {
     const q = searchText.trim().toUpperCase()

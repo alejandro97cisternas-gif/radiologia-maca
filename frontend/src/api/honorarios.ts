@@ -17,6 +17,9 @@ export const getTiposExamen = () =>
 export const getAllTiposExamenCustom = () =>
   api.get('/api/honorarios/tipos-examen').then(r => r.data as { id: number; nombre: string; dimension: '2D' | '3D'; activo: boolean }[])
 
+export const syncTiposExamen = () =>
+  api.post('/api/honorarios/sync-tipos').then(r => r.data)
+
 export const crearTipoExamen = (body: { nombre: string; dimension: '2D' | '3D' }) =>
   api.post('/api/honorarios/tipos-examen', body).then(r => r.data)
 
