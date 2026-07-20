@@ -227,8 +227,10 @@ def crear_tarifa_item(derivador_id: int, body: TarifaItemCreate, request: Reques
         if custom:
             if not custom.activo:
                 custom.activo = True
+            if not custom.categoria:
+                custom.categoria = "Personalizado"
         else:
-            db.add(TipoExamenCustom(radiologo_id=radiologo.id, nombre=nombre, dimension=body.dimension))
+            db.add(TipoExamenCustom(radiologo_id=radiologo.id, nombre=nombre, dimension=body.dimension, categoria="Personalizado"))
     tarifa = db.query(TarifaDerivador).filter(TarifaDerivador.derivador_id == derivador_id, TarifaDerivador.tipo_examen == nombre).first()
     if tarifa:
         tarifa.precio = body.precio

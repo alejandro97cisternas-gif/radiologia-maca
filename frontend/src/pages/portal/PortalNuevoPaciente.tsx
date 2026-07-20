@@ -384,12 +384,20 @@ function CardExamen({
           style={{ flex: 1 }}
           options={(() => {
             const categorias = [...new Set(tipos.map(t => t.categoria).filter(Boolean))]
-            return categorias.map(cat => ({
+            const grupos = categorias.map(cat => ({
               label: cat,
               options: tipos
                 .filter(t => t.categoria === cat)
                 .map(t => ({ value: t.nombre, label: t.nombre, disabled: tiposUsados.has(t.nombre) })),
             }))
+            const sinCat = tipos.filter(t => !t.categoria)
+            if (sinCat.length) {
+              grupos.push({
+                label: 'Personalizado',
+                options: sinCat.map(t => ({ value: t.nombre, label: t.nombre, disabled: tiposUsados.has(t.nombre) })),
+              })
+            }
+            return grupos
           })()}
         />
         {card.tipo_examen && dim === 'AMBOS' && (
