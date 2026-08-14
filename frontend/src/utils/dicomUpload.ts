@@ -12,18 +12,31 @@ export async function isDicomFile(file: File): Promise<boolean> {
   return false
 }
 
-async function readEntry(entry: FileSystemEntry): Promise<File[]> {
+export interface DicomEntry { file: File; path: string }
+
+/** Extrae la carpeta contenedora del path relativo.
+ *  "Serie1/000001.dcm"       → "Serie1"
+ *  "Root/A/B/000001.dcm"    → "Root/A/B"
+ *  "000001.dcm"              → ""
+ */
+export function pathToUbicacion(path: string): string {
+  const parts = path.split('/')
+  return parts.length > 1 ? parts.slice(0, -1).join('/') : ''
+}
+
+async function readEntry(entry: FileSystemEntry, pathPrefix = ''): Promise<DicomEntry[]> {
+  const currentPath = pathPrefix ? `${pathPrefix}/${entry.name}` : entry.name
   if (entry.isFile) {
     return new Promise(res => {
-      (entry as FileSystemFileEntry).file(f => res([f]), () => res([]))
+      (entry as FileSystemFileEntry).file(f => res([{ file: f, path: currentPath }]), () => res([]))
     })
   }
   const reader = (entry as FileSystemDirectoryEntry).createReader()
-  const all: File[] = []
+  const all: DicomEntry[] = []
   await new Promise<void>(resolve => {
     const batch = () => reader.readEntries(async entries => {
       if (!entries.length) { resolve(); return }
-      for (const e of entries) all.push(...await readEntry(e))
+      for (const e of entries) all.push(...await readEntry(e, currentPath))
       batch()
     }, () => resolve())
     batch()
@@ -31,43 +44,52 @@ async function readEntry(entry: FileSystemEntry): Promise<File[]> {
   return all
 }
 
-/** Lee todos los archivos de un evento drop, incluyendo carpetas recursivamente. */
-export async function readDropItems(items: DataTransferItemList): Promise<File[]> {
-  const files: File[] = []
+/** Lee todos los archivos de un evento drop, incluyendo carpetas recursivamente.
+ *  Preserva la ruta relativa de cada archivo en `path`.
+ */
+export async function readDropItems(items: DataTransferItemList): Promise<DicomEntry[]> {
+  const entries: DicomEntry[] = []
   for (let i = 0; i < items.length; i++) {
     const entry = items[i].webkitGetAsEntry?.()
     if (entry) {
-      files.push(...await readEntry(entry))
+      entries.push(...await readEntry(entry))
     } else {
       const f = items[i].getAsFile()
-      if (f) files.push(f)
+      if (f) entries.push({ file: f, path: f.name })
     }
   }
-  return files
+  return entries
 }
 
-/** Filtra archivos DICOM por magic bytes. Devuelve válidos y cuenta de omitidos. */
-export async function filterDicomFromFiles(files: File[]): Promise<{ dicom: File[]; skipped: number }> {
-  const checks = await Promise.all(files.map(async f => ({ f, ok: await isDicomFile(f) })))
-  const dicom = checks.filter(c => c.ok).map(c => c.f)
-  return { dicom, skipped: files.length - dicom.length }
+/** Filtra archivos DICOM por magic bytes. Acepta DicomEntry[] o File[]. */
+export async function filterDicomFromFiles(
+  entries: (DicomEntry | File)[],
+): Promise<{ dicom: DicomEntry[]; skipped: number }> {
+  const normalized: DicomEntry[] = entries.map(e =>
+    e instanceof File
+      ? { file: e, path: (e as any).webkitRelativePath || e.name }
+      : e
+  )
+  const checks = await Promise.all(normalized.map(async e => ({ e, ok: await isDicomFile(e.file) })))
+  const dicom = checks.filter(c => c.ok).map(c => c.e)
+  return { dicom, skipped: entries.length - dicom.length }
 }
 
-/** Extrae archivos DICOM de un ZIP. Devuelve los archivos y cuántos se omitieron. */
+/** Extrae archivos DICOM de un ZIP. */
 export async function extractDicomFromZip(zipFile: File): Promise<{ dicom: File[]; skipped: number; total: number }> {
   const { unzipSync } = await import('fflate')
   const buf = await zipFile.arrayBuffer()
   const entries = unzipSync(new Uint8Array(buf))
 
   const candidates: File[] = Object.entries(entries)
-    .filter(([name]) => !name.endsWith('/'))  // skip directories
+    .filter(([name]) => !name.endsWith('/'))
     .map(([name, data]) => {
       const basename = name.split('/').pop() || name
       return new File([data], basename, { type: 'application/octet-stream' })
     })
 
   const { dicom, skipped } = await filterDicomFromFiles(candidates)
-  return { dicom, skipped, total: candidates.length }
+  return { dicom: dicom.map(e => e.file), skipped, total: candidates.length }
 }
 
 const DOC_EXTS = new Set(['pdf', 'png', 'jpg', 'jpeg', 'ppt', 'pptx'])

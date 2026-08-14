@@ -14,7 +14,7 @@ import {
   portalGetTipos, portalEliminarExamen,
 } from '../../api/portal'
 import { useUpload } from '../../context/UploadContext'
-import { readDropItems, filterDicomFromFiles, extractDicomFromZip } from '../../utils/dicomUpload'
+import { readDropItems, filterDicomFromFiles, extractDicomFromZip, pathToUbicacion } from '../../utils/dicomUpload'
 import NovexBadge from '../../components/NovexBadge'
 import { normalizarRut } from '../../utils/rut'
 
@@ -54,7 +54,7 @@ function DropZone({
 }: {
   label: string
   accept: string
-  onFiles: (files: File[]) => void
+  onFiles: (files: File[], paths?: string[]) => void
   folderScan?: boolean
 }) {
   const mainRef = useRef<HTMLInputElement>(null)
@@ -79,7 +79,7 @@ function DropZone({
         const all = await readDropItems(e.dataTransfer.items)
         const { dicom, skipped } = await filterDicomFromFiles(all)
         if (skipped > 0) message.info(`${skipped} archivo${skipped !== 1 ? 's' : ''} omitido${skipped !== 1 ? 's' : ''} (no son DICOM)`)
-        if (dicom.length) onFiles(dicom)
+        if (dicom.length) onFiles(dicom.map(e => e.file), dicom.map(e => e.path))
       } finally {
         setProcesando(false)
       }
@@ -94,7 +94,7 @@ function DropZone({
     try {
       const { dicom, skipped } = await filterDicomFromFiles(Array.from(e.target.files))
       if (skipped > 0) message.info(`${skipped} archivo${skipped !== 1 ? 's' : ''} omitido${skipped !== 1 ? 's' : ''} (no son DICOM)`)
-      if (dicom.length) onFiles(dicom)
+      if (dicom.length) onFiles(dicom.map(e => e.file), dicom.map(e => e.path))
     } finally {
       setProcesando(false)
       e.target.value = ''
@@ -317,11 +317,16 @@ function CardExamen({
     }
   }
 
-  const subirArchivos = (files: File[], subtipo: ArchivoSubida['subtipo'], ubicacion = '', dimFolder?: '2D' | '3D') => {
+  const subirArchivos = (files: File[], subtipo: ArchivoSubida['subtipo'], ubicacion = '', dimFolder?: '2D' | '3D', paths?: string[]) => {
     if (!card.examen_id) return
-    const nuevos: ArchivoSubida[] = files.map(f => ({
+    const nuevos: ArchivoSubida[] = files.map((f, i) => ({
       id: `${f.name}-${Date.now()}-${Math.random()}`,
-      file: f, subtipo, ubicacion, dimFolder, progreso: 0, estado: 'pendiente' as const,
+      file: f,
+      subtipo,
+      ubicacion: subtipo === 'dicom' && paths?.[i] ? pathToUbicacion(paths[i]) : ubicacion,
+      dimFolder,
+      progreso: 0,
+      estado: 'pendiente' as const,
       preview: f.type.startsWith('image/') ? URL.createObjectURL(f) : undefined,
     }))
 
@@ -440,7 +445,7 @@ function CardExamen({
             <Typography.Text strong style={{ fontSize: 12, color: '#7c3aed', display: 'block', marginBottom: 6 }}>
               🧊 DICOM (.dcm)
             </Typography.Text>
-            <DropZone accept=".dcm,.dicom" label="Arrastra archivos .dcm o carpeta" onFiles={files => subirArchivos(files, 'dicom')} folderScan />
+            <DropZone accept=".dcm,.dicom" label="Arrastra archivos .dcm o carpeta" onFiles={(files, paths) => subirArchivos(files, 'dicom', '', undefined, paths)} folderScan />
             <ListaArchivos archivos={card.archivos.filter(a => a.subtipo === 'dicom')} resumen />
           </div>
           <div>
@@ -489,7 +494,7 @@ function CardExamen({
             <Typography.Text strong style={{ fontSize: 12, color: '#7c3aed', display: 'block', marginBottom: 6 }}>
               🧊 3D — DICOM
             </Typography.Text>
-            <DropZone accept=".dcm,.dicom" label="Arrastra archivos .dcm o carpeta" onFiles={files => subirArchivos(files, 'dicom', '', '3D')} folderScan />
+            <DropZone accept=".dcm,.dicom" label="Arrastra archivos .dcm o carpeta" onFiles={(files, paths) => subirArchivos(files, 'dicom', '', '3D', paths)} folderScan />
             <ListaArchivos archivos={card.archivos.filter(a => a.dimFolder === '3D' && a.subtipo === 'dicom')} resumen />
             <div style={{ marginTop: 8 }}>
               <Typography.Text strong style={{ fontSize: 12, color: '#059669', display: 'block', marginBottom: 6 }}>

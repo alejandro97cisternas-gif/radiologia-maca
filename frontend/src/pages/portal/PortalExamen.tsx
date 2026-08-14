@@ -14,7 +14,7 @@ import {
   portalSubirImagen, portalSubirEnChunks, portalEliminarImagen,
   portalConfirmarEdicion, portalGuardarNota, portalDescargarInformes,
 } from '../../api/portal'
-import { readDropItems, filterDicomFromFiles } from '../../utils/dicomUpload'
+import { readDropItems, filterDicomFromFiles, pathToUbicacion } from '../../utils/dicomUpload'
 import { portalGetIncidencia, portalResolverIncidencia } from '../../api/incidencias'
 import type { Incidencia } from '../../api/incidencias'
 import { message } from 'antd'
@@ -152,16 +152,18 @@ export default function PortalExamen() {
     }
   }
 
-  const handleUpload = async (files: File | File[], subtipo: 'imagen' | 'dicom' | 'preview') => {
+  const handleUpload = async (files: File | File[], subtipo: 'imagen' | 'dicom' | 'preview', ubicaciones?: string[]) => {
     const lista = Array.isArray(files) ? files : [files]
     const dim = examen?.dimension
     const dimOverride: '2D' | '3D' | undefined = dim === 'AMBOS' ? (subtipo === 'imagen' ? '2D' : '3D') : undefined
     setUploading(true)
-    for (const file of lista) {
+    for (let i = 0; i < lista.length; i++) {
+      const file = lista[i]
+      const ub = ubicaciones?.[i] ?? ''
       setUploadProgress(0)
       try {
         if (subtipo === 'dicom') {
-          await portalSubirEnChunks(examenId, file, subtipo, setUploadProgress, '', dimOverride)
+          await portalSubirEnChunks(examenId, file, subtipo, setUploadProgress, ub, dimOverride)
         } else {
           await portalSubirImagen(examenId, subtipo, file, setUploadProgress, '', dimOverride)
         }
@@ -182,14 +184,14 @@ export default function PortalExamen() {
     const all = await readDropItems(e.dataTransfer.items)
     const { dicom, skipped } = await filterDicomFromFiles(all)
     if (skipped > 0) message.info(`${skipped} archivo${skipped !== 1 ? 's' : ''} omitido${skipped !== 1 ? 's' : ''} (no son DICOM)`)
-    if (dicom.length) handleUpload(dicom, 'dicom')
+    if (dicom.length) handleUpload(dicom.map(e => e.file), 'dicom', dicom.map(e => pathToUbicacion(e.path)))
   }
 
   const handleDicomFolderInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return
     const { dicom, skipped } = await filterDicomFromFiles(Array.from(e.target.files))
     if (skipped > 0) message.info(`${skipped} archivo${skipped !== 1 ? 's' : ''} omitido${skipped !== 1 ? 's' : ''} (no son DICOM)`)
-    if (dicom.length) handleUpload(dicom, 'dicom')
+    if (dicom.length) handleUpload(dicom.map(e => e.file), 'dicom', dicom.map(e => pathToUbicacion(e.path)))
     e.target.value = ''
   }
 
