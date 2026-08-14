@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useRef, useState } from 'react'
-import { portalSubirEnChunks, portalSubirImagen, portalPresignBatch, R2_PART_SIZE, PresignResult } from '../api/portal'
+import { portalSubirEnChunks, portalSubirImagen, portalPresignBatch, R2_PART_SIZE } from '../api/portal'
+import type { PresignResult } from '../api/portal'
 
 const MAX_CONCURRENT_FILES = 6
 
