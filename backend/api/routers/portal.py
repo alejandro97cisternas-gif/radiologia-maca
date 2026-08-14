@@ -624,6 +624,67 @@ def presign_multipart(
     return {"upload_id": meta_id, "parts": parts}
 
 
+@router.post("/examenes/{examen_id}/imagenes/presign-batch", status_code=201)
+def presign_batch_endpoint(
+    examen_id: int,
+    items: list[PresignMultipartBody],
+    derivador: Derivador = Depends(get_portal_derivador),
+    db: Session = Depends(get_db),
+):
+    if not _is_r2():
+        raise HTTPException(501, "Direct upload solo disponible con storage R2")
+
+    examen = db.query(Examen).filter(
+        Examen.id == examen_id, Examen.derivador_id == derivador.id
+    ).first()
+    if not examen:
+        raise HTTPException(404, "Examen no encontrado")
+    if examen.estado == "COMPLETADO":
+        raise HTTPException(400, "No se puede modificar un examen completado")
+
+    tipo = examen.tipo_examen
+    pid = examen.paciente_id
+    pnombre = examen.paciente.nombre_completo
+    rid = derivador.radiologo_id
+    did = derivador.id
+
+    results = []
+    for item in items:
+        dim = _resolver_dim(tipo, rid, db)
+        if dim == "AMBOS":
+            if item.dim_override not in ("2D", "3D"):
+                raise HTTPException(400, "dim_override='2D' o '3D' requerido")
+            dim = item.dim_override
+
+        if item.subtipo == "dicom":
+            key = key_dicom(rid, did, pid, pnombre, examen_id, tipo, item.nombre, ubicacion=item.ubicacion, dim=dim)
+            content_type = "application/dicom"
+        elif item.subtipo == "preview":
+            key = key_preview_3d(rid, did, pid, pnombre, examen_id, tipo, item.nombre, dim=dim)
+            content_type = "image/png"
+        else:
+            key = key_imagen_2d(rid, did, pid, pnombre, examen_id, tipo, item.nombre, dim=dim)
+            ext = item.nombre.rsplit(".", 1)[-1].lower()
+            content_type = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}.get(ext, "application/octet-stream")
+
+        r2_upload_id = iniciar_multipart(key, content_type)
+        meta_id = str(uuid.uuid4())
+
+        _MULTIPART_DIR.mkdir(exist_ok=True)
+        (_MULTIPART_DIR / f"{meta_id}.json").write_text(json.dumps({
+            "key": key, "r2_upload_id": r2_upload_id, "examen_id": examen_id,
+            "subtipo": item.subtipo, "dim": dim, "nombre": item.nombre,
+        }))
+
+        parts = [
+            {"part_number": i + 1, "url": presign_parte(key, r2_upload_id, i + 1)}
+            for i in range(item.total_parts)
+        ]
+        results.append({"nombre": item.nombre, "upload_id": meta_id, "parts": parts})
+
+    return results
+
+
 @router.post("/examenes/{examen_id}/imagenes/completar-multipart", status_code=201)
 def completar_multipart_endpoint(
     examen_id: int,

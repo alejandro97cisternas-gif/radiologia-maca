@@ -18,6 +18,15 @@ from modulos.derivadores.models import Derivador
 
 router = APIRouter(prefix="/api/examenes", tags=["examenes"])
 
+
+def _zip_entry_name(ruta: str) -> str:
+    """Para archivos DICOM preserva la subcarpeta: 'Serie1/000001.dcm'.
+    Para otros tipos devuelve solo el basename."""
+    idx = ruta.find("/dicom/")
+    if idx >= 0:
+        return ruta[idx + 7:]
+    return ruta.rsplit("/", 1)[-1]
+
 ESTADOS_VALIDOS = ["PENDIENTE", "EN_PROCESO", "COMPLETADO"]
 
 
@@ -185,9 +194,9 @@ def descargar_imagenes(examen_id: int, request: Request, db: Session = Depends(g
     def _generar():
         zf = zipstream.ZipFile(mode="w", compression=zipstream.ZIP_STORED, allowZip64=True)
         for img in imagenes:
-            nombre = img.ruta.rsplit("/", 1)[-1]
+            entry = _zip_entry_name(img.ruta)
             try:
-                zf.write_iter(nombre, stream_bytes(img.ruta))
+                zf.write_iter(entry, stream_bytes(img.ruta))
             except Exception:
                 pass
         yield from zf
@@ -388,7 +397,7 @@ def presign_descarga_caso(caso_id: str, request: Request, db: Session = Depends(
     conteo: dict[str, int] = defaultdict(int)
     for examen in examenes:
         for img in examen.imagenes:
-            conteo[img.ruta.rsplit("/", 1)[-1]] += 1
+            conteo[_zip_entry_name(img.ruta)] += 1
     compartidas = {n for n, c in conteo.items() if c > 1}
 
     archivos = []
@@ -396,13 +405,13 @@ def presign_descarga_caso(caso_id: str, request: Request, db: Session = Depends(
     for examen in examenes:
         folder = examen.tipo_examen.replace("/", "-")[:40]
         for img in examen.imagenes:
-            nombre = img.ruta.rsplit("/", 1)[-1]
-            if nombre in compartidas:
-                if nombre not in escritas_compartidas:
-                    escritas_compartidas.add(nombre)
-                    archivos.append({"path": f"imagenes_compartidas/{nombre}", "url": get_url(img.ruta, expiry=3600)})
+            entry = _zip_entry_name(img.ruta)
+            if entry in compartidas:
+                if entry not in escritas_compartidas:
+                    escritas_compartidas.add(entry)
+                    archivos.append({"path": f"imagenes_compartidas/{entry}", "url": get_url(img.ruta, expiry=3600)})
             else:
-                archivos.append({"path": f"{folder}/{nombre}", "url": get_url(img.ruta, expiry=3600)})
+                archivos.append({"path": f"{folder}/{entry}", "url": get_url(img.ruta, expiry=3600)})
 
     nombre_zip = f"{rut}-{'caso' if len(examenes) > 1 else examenes[0].tipo_examen}.zip"
     now = datetime.now(timezone.utc)
@@ -418,12 +427,12 @@ def descargar_caso(caso_id: str, request: Request, db: Session = Depends(get_db)
     examenes = _examenes_por_caso(caso_id, radiologo.id, db)
     rut = examenes[0].paciente.rut or f"pac{examenes[0].paciente_id}"
 
-    # Detectar imágenes compartidas (mismo nombre de archivo en varios exámenes)
+    # Detectar imágenes compartidas (mismo entry en varios exámenes)
     from collections import defaultdict
     conteo: dict[str, int] = defaultdict(int)
     for examen in examenes:
         for img in examen.imagenes:
-            conteo[img.ruta.rsplit("/", 1)[-1]] += 1
+            conteo[_zip_entry_name(img.ruta)] += 1
     compartidas = {n for n, c in conteo.items() if c > 1}
 
     now = datetime.now(timezone.utc)
@@ -439,19 +448,20 @@ def descargar_caso(caso_id: str, request: Request, db: Session = Depends(get_db)
             folder = examen.tipo_examen.replace("/", "-")[:40]
             propias, refs_compartidas = [], []
             for img in imgs:
-                nombre = img.ruta.rsplit("/", 1)[-1]
-                if nombre in compartidas:
+                entry = _zip_entry_name(img.ruta)
+                nombre = entry.rsplit("/", 1)[-1]
+                if entry in compartidas:
                     refs_compartidas.append(nombre)
-                    if nombre not in escritas_compartidas:
+                    if entry not in escritas_compartidas:
                         try:
-                            zf.write_iter(f"imagenes_compartidas/{nombre}", stream_bytes(img.ruta))
-                            escritas_compartidas.add(nombre)
+                            zf.write_iter(f"imagenes_compartidas/{entry}", stream_bytes(img.ruta))
+                            escritas_compartidas.add(entry)
                         except Exception:
                             pass
                 else:
-                    propias.append(nombre)
+                    propias.append(entry)
                     try:
-                        zf.write_iter(f"{folder}/{nombre}", stream_bytes(img.ruta))
+                        zf.write_iter(f"{folder}/{entry}", stream_bytes(img.ruta))
                     except Exception:
                         pass
             lineas = [f"Tipo de examen: {examen.tipo_examen}"]

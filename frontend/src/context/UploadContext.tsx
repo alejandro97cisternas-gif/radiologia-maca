@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useRef, useState } from 'react'
-import { portalSubirEnChunks, portalSubirImagen } from '../api/portal'
+import { portalSubirEnChunks, portalSubirImagen, portalPresignBatch, R2_PART_SIZE, PresignResult } from '../api/portal'
 
-const MAX_CONCURRENT_FILES = 4
+const MAX_CONCURRENT_FILES = 6
 
 export interface UploadTask {
   id: string
@@ -20,6 +20,17 @@ interface StartParams {
   subtipo: 'dicom' | 'preview' | 'imagen'
   ubicacion?: string
   dimOverride?: '2D' | '3D'
+  prefetchedPresign?: PresignResult
+  onProgress?: (pct: number) => void
+  onComplete?: (result: any) => void
+  onError?: (err: Error) => void
+}
+
+export interface BatchFile {
+  file: File
+  subtipo: 'dicom' | 'preview' | 'imagen'
+  ubicacion?: string
+  dimOverride?: '2D' | '3D'
   onProgress?: (pct: number) => void
   onComplete?: (result: any) => void
   onError?: (err: Error) => void
@@ -28,9 +39,10 @@ interface StartParams {
 interface UploadContextValue {
   tasks: UploadTask[]
   startUpload: (params: StartParams) => void
+  startBatchUpload: (examenId: number, files: BatchFile[]) => void
 }
 
-const UploadContext = createContext<UploadContextValue>({ tasks: [], startUpload: () => {} })
+const UploadContext = createContext<UploadContextValue>({ tasks: [], startUpload: () => {}, startBatchUpload: () => {} })
 
 export const useUpload = () => useContext(UploadContext)
 
@@ -48,8 +60,41 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  const startBatchUpload = useCallback(async (examenId: number, files: BatchFile[]) => {
+    if (files.length === 0) return
+
+    let presignMap: Map<string, PresignResult> | null = null
+    try {
+      const batchItems = files.map(f => ({
+        nombre: f.file.name,
+        total_parts: Math.max(1, Math.ceil(f.file.size / R2_PART_SIZE)),
+        subtipo: f.subtipo,
+        ubicacion: f.ubicacion ?? '',
+        dim_override: f.dimOverride,
+      }))
+      const results = await portalPresignBatch(examenId, batchItems)
+      presignMap = new Map(results.map((r, i) => [`${i}:${files[i].file.name}`, r]))
+    } catch {
+      // fall back to individual presign per file
+    }
+
+    files.forEach((f, i) => {
+      startUpload({
+        examenId,
+        file: f.file,
+        subtipo: f.subtipo,
+        ubicacion: f.ubicacion,
+        dimOverride: f.dimOverride,
+        prefetchedPresign: presignMap?.get(`${i}:${f.file.name}`),
+        onProgress: f.onProgress,
+        onComplete: f.onComplete,
+        onError: f.onError,
+      })
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const startUpload = useCallback((params: StartParams) => {
-    const { examenId, file, subtipo, ubicacion = '', dimOverride, onProgress, onComplete, onError } = params
+    const { examenId, file, subtipo, ubicacion = '', dimOverride, prefetchedPresign, onProgress, onComplete, onError } = params
     const id = crypto.randomUUID()
 
     const initialEstado = activeRef.current < MAX_CONCURRENT_FILES ? 'subiendo' : 'enCola'
@@ -87,7 +132,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     const doUpload = () => {
       setTasks(prev => prev.map(t => t.id === id ? { ...t, estado: 'subiendo' } : t))
       const promise = subtipo === 'dicom'
-        ? portalSubirEnChunks(examenId, file, subtipo, handleProgress, ubicacion, dimOverride)
+        ? portalSubirEnChunks(examenId, file, subtipo, handleProgress, ubicacion, dimOverride, prefetchedPresign)
         : portalSubirImagen(examenId, subtipo, file, handleProgress, ubicacion, dimOverride)
 
       promise.then(result => {
@@ -114,7 +159,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
   }, [runQueued])
 
   return (
-    <UploadContext.Provider value={{ tasks, startUpload }}>
+    <UploadContext.Provider value={{ tasks, startUpload, startBatchUpload }}>
       {children}
     </UploadContext.Provider>
   )

@@ -57,9 +57,9 @@ export const portalSubirImagen = (
 
 // ── Upload chunkeado (para archivos DICOM grandes) ────────────────────────────
 
-const CHUNK_SIZE = 4 * 1024 * 1024    // 4 MB — fallback chunked (dev local)
-const R2_PART_SIZE = 8 * 1024 * 1024  // 8 MB — partes multipart directo a R2
-const UPLOAD_CONCURRENCY = 6          // partes en paralelo
+const CHUNK_SIZE = 4 * 1024 * 1024       // 4 MB — fallback chunked (dev local)
+export const R2_PART_SIZE = 8 * 1024 * 1024  // 8 MB — partes multipart directo a R2
+const UPLOAD_CONCURRENCY = 6               // partes en paralelo
 
 const portalIniciarSubida = (
   examenId: number,
@@ -150,6 +150,14 @@ const _subirChunkeado = async (
   return result
 }
 
+export type PresignResult = { upload_id: string; parts: { part_number: number; url: string }[] }
+
+export const portalPresignBatch = (
+  examenId: number,
+  items: Array<{ nombre: string; total_parts: number; subtipo: string; ubicacion?: string; dim_override?: string }>,
+): Promise<Array<PresignResult & { nombre: string }>> =>
+  portalApi.post(`/api/portal/examenes/${examenId}/imagenes/presign-batch`, items).then(r => r.data)
+
 // ── Punto de entrada público: R2 directo con fallback chunked ─────────────────
 
 export const portalSubirEnChunks = async (
@@ -159,23 +167,25 @@ export const portalSubirEnChunks = async (
   onProgress?: (pct: number) => void,
   ubicacion = '',
   dimOverride?: '2D' | '3D',
+  prefetchedPresign?: PresignResult,
 ) => {
-  // Probe R2: only try direct upload if presign endpoint is available
-  let presignData: { upload_id: string; parts: { part_number: number; url: string }[] } | null = null
-  try {
-    const totalParts = Math.max(1, Math.ceil(file.size / R2_PART_SIZE))
-    presignData = await portalApi.post(
-      `/api/portal/examenes/${examenId}/imagenes/presign-multipart`,
-      { nombre: file.name, total_parts: totalParts, subtipo, ubicacion, dim_override: dimOverride },
-    ).then(r => r.data)
-  } catch (err: any) {
-    const status = err.response?.status
-    if (status === 501) {
-      // R2 not configured — use chunked
+  let presignData: PresignResult | null = prefetchedPresign ?? null
+
+  if (!presignData) {
+    try {
+      const totalParts = Math.max(1, Math.ceil(file.size / R2_PART_SIZE))
+      presignData = await portalApi.post(
+        `/api/portal/examenes/${examenId}/imagenes/presign-multipart`,
+        { nombre: file.name, total_parts: totalParts, subtipo, ubicacion, dim_override: dimOverride },
+      ).then(r => r.data)
+    } catch (err: any) {
+      const status = err.response?.status
+      if (status === 501) {
+        return _subirChunkeado(examenId, file, subtipo, onProgress, ubicacion, dimOverride)
+      }
+      console.warn('presign-multipart failed, falling back to chunked:', err.message)
       return _subirChunkeado(examenId, file, subtipo, onProgress, ubicacion, dimOverride)
     }
-    console.warn('presign-multipart failed, falling back to chunked:', err.message)
-    return _subirChunkeado(examenId, file, subtipo, onProgress, ubicacion, dimOverride)
   }
 
   // Presign succeeded — complete the R2 upload (do NOT fall back to chunked from here,

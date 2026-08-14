@@ -13,6 +13,7 @@ import {
   portalGetExamen, portalGetImagenes, portalGetRevisiones,
   portalSubirImagen, portalSubirEnChunks, portalEliminarImagen,
   portalConfirmarEdicion, portalGuardarNota, portalDescargarInformes,
+  portalPresignBatch, R2_PART_SIZE,
 } from '../../api/portal'
 import { readDropItems, filterDicomFromFiles, pathToUbicacion } from '../../utils/dicomUpload'
 import { portalGetIncidencia, portalResolverIncidencia } from '../../api/incidencias'
@@ -157,22 +158,60 @@ export default function PortalExamen() {
     const dim = examen?.dimension
     const dimOverride: '2D' | '3D' | undefined = dim === 'AMBOS' ? (subtipo === 'imagen' ? '2D' : '3D') : undefined
     setUploading(true)
-    for (let i = 0; i < lista.length; i++) {
-      const file = lista[i]
-      const ub = ubicaciones?.[i] ?? ''
-      setUploadProgress(0)
+
+    // Batch-presign all DICOM files at once before starting uploads
+    let presignResults: Array<{ upload_id: string; parts: { part_number: number; url: string }[] } | undefined> | null = null
+    if (subtipo === 'dicom' && lista.length > 0) {
       try {
-        if (subtipo === 'dicom') {
-          await portalSubirEnChunks(examenId, file, subtipo, setUploadProgress, ub, dimOverride)
-        } else {
-          await portalSubirImagen(examenId, subtipo, file, setUploadProgress, '', dimOverride)
+        const batchItems = lista.map((f, i) => ({
+          nombre: f.name,
+          total_parts: Math.max(1, Math.ceil(f.size / R2_PART_SIZE)),
+          subtipo,
+          ubicacion: ubicaciones?.[i] ?? '',
+          dim_override: dimOverride,
+        }))
+        presignResults = await portalPresignBatch(examenId, batchItems)
+      } catch { /* fall through to individual presign */ }
+    }
+
+    // Upload up to 6 files concurrently
+    const CONCURRENCY = 6
+    let nextIdx = 0
+    const bytesPerFile = new Map<number, number>()
+    const updateProgress = () => {
+      const total = lista.reduce((s, f) => s + f.size, 0)
+      const done = Array.from(bytesPerFile.values()).reduce((s, v) => s + v, 0)
+      setUploadProgress(total > 0 ? Math.round((done / total) * 100) : 0)
+    }
+
+    const worker = async () => {
+      while (nextIdx < lista.length) {
+        const i = nextIdx++
+        const file = lista[i]
+        const ub = ubicaciones?.[i] ?? ''
+        try {
+          if (subtipo === 'dicom') {
+            await portalSubirEnChunks(
+              examenId, file, subtipo,
+              pct => { bytesPerFile.set(i, (pct / 100) * file.size); updateProgress() },
+              ub, dimOverride, presignResults?.[i],
+            )
+          } else {
+            await portalSubirImagen(
+              examenId, subtipo, file,
+              pct => { bytesPerFile.set(i, (pct / 100) * file.size); updateProgress() },
+              '', dimOverride,
+            )
+          }
+          setHasChanges(true)
+          message.success(`"${file.name}" subida`)
+        } catch {
+          message.error(`Error al subir "${file.name}"`)
         }
-        setHasChanges(true)
-        message.success(`"${file.name}" subida`)
-      } catch {
-        message.error(`Error al subir "${file.name}"`)
       }
     }
+
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, lista.length) }, worker))
     setUploading(false)
     setUploadProgress(0)
     cargar()
