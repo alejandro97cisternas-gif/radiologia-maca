@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from core.database import Base
@@ -14,5 +14,6 @@ class Incidencia(Base):
     estado = Column(String, default="ABIERTA")   # ABIERTA | RESUELTA
     creado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     resuelto_en = Column(DateTime, nullable=True)
+    vista_doctora = Column(Boolean, default=False, server_default='false')
 
     examen = relationship("Examen", backref="incidencia", uselist=False)

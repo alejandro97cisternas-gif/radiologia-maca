@@ -9,6 +9,7 @@ export interface Incidencia {
   estado: 'ABIERTA' | 'RESUELTA'
   creado_en: string
   resuelto_en: string | null
+  vista_doctora: boolean
 }
 
 // Doctora

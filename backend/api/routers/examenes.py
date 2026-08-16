@@ -47,7 +47,7 @@ def listar_tipos(request: Request, db: Session = Depends(get_db)):
     ]
 
 
-def _serializar(e: Examen, inc_estado: str | None = None) -> dict:
+def _serializar(e: Examen, inc: dict | None = None) -> dict:
     return {
         "id": e.id,
         "caso_id": e.caso_id,
@@ -64,7 +64,8 @@ def _serializar(e: Examen, inc_estado: str | None = None) -> dict:
         "imagenes_count": len(e.imagenes),
         "tiene_informe": bool(e.informes),
         "informe_token": e.informes[-1].token_publico if e.informes else None,
-        "incidencia_estado": inc_estado,
+        "incidencia_estado": inc["estado"] if inc else None,
+        "incidencia_vista_doctora": inc["vista_doctora"] if inc else True,
         "version": e.version or 0,
         "derivador_color": e.derivador.color or "#6b7280",
         "notificacion_derivador_enviada": e.notificacion_derivador_enviada,
@@ -72,10 +73,13 @@ def _serializar(e: Examen, inc_estado: str | None = None) -> dict:
     }
 
 
-def _inc_map(db: Session, exam_ids: list[int]) -> dict[int, str]:
+def _inc_map(db: Session, exam_ids: list[int]) -> dict[int, dict]:
     if not exam_ids:
         return {}
-    return {i.examen_id: i.estado for i in db.query(Incidencia).filter(Incidencia.examen_id.in_(exam_ids)).all()}
+    return {
+        i.examen_id: {"estado": i.estado, "vista_doctora": i.vista_doctora}
+        for i in db.query(Incidencia).filter(Incidencia.examen_id.in_(exam_ids)).all()
+    }
 
 
 def _examen_del_tenant(examen_id: int, radiologo_id: int, db: Session) -> Examen:

@@ -24,6 +24,7 @@ def _serializar(inc: Incidencia) -> dict:
         "estado": inc.estado,
         "creado_en": inc.creado_en,
         "resuelto_en": inc.resuelto_en,
+        "vista_doctora": inc.vista_doctora,
     }
 
 
@@ -65,6 +66,9 @@ def get_incidencia(examen_id: int, request: Request, db: Session = Depends(get_d
     if not examen:
         raise HTTPException(404, "Examen no encontrado")
     inc = db.query(Incidencia).filter(Incidencia.examen_id == examen_id).first()
+    if inc and inc.estado == "RESUELTA" and not inc.vista_doctora:
+        inc.vista_doctora = True
+        db.commit()
     return _serializar(inc) if inc else None
 
 

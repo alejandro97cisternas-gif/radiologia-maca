@@ -4,10 +4,11 @@ import { WarningOutlined } from '@ant-design/icons'
 
 interface ExamenConIncidencia {
   id: number
-  paciente: string        // nombre del paciente
+  paciente: string
   tipo_examen: string
-  derivador: string       // nombre de la clínica
+  derivador: string
   incidencia_estado: 'ABIERTA' | 'RESUELTA' | null
+  incidencia_vista_doctora?: boolean
 }
 
 interface Props {
@@ -17,10 +18,13 @@ interface Props {
 
 export default function PanelIncidencias({ examenes, onAbrir }: Props) {
   const conIncidencia = useMemo(
-    () => examenes.filter(e => e.incidencia_estado === 'ABIERTA'),
+    () => examenes.filter(e =>
+      e.incidencia_estado === 'ABIERTA' ||
+      (e.incidencia_estado === 'RESUELTA' && !e.incidencia_vista_doctora)
+    ),
     [examenes],
   )
-  const abiertas = conIncidencia.length
+  const abiertas = conIncidencia.filter(e => e.incidencia_estado === 'ABIERTA').length
 
   if (conIncidencia.length === 0) return null
 
