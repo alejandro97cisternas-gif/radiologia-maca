@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Alert, Button, Form, Input, Tag, Divider, Typography, Popconfirm, message } from 'antd'
-import { WarningOutlined, CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons'
+import { WarningOutlined, CheckCircleOutlined, ReloadOutlined, CheckOutlined } from '@ant-design/icons'
 import { getIncidencia, crearIncidencia, actualizarIncidencia } from '../api/incidencias'
 import type { Incidencia } from '../api/incidencias'
 
@@ -34,6 +34,16 @@ export default function IncidenciaSection({ examenId }: Props) {
       message.success('Incidencia creada — derivador notificado por email')
     } catch (e: any) {
       message.error(e?.response?.data?.detail || 'Error al crear incidencia')
+    } finally { setGuardando(false) }
+  }
+
+  const handleCerrar = async () => {
+    if (!incidencia) return
+    setGuardando(true)
+    try {
+      const inc = await actualizarIncidencia(incidencia.id, { estado: 'RESUELTA' })
+      setIncidencia(inc)
+      message.success('Incidencia cerrada')
     } finally { setGuardando(false) }
   }
 
@@ -104,6 +114,16 @@ export default function IncidenciaSection({ examenId }: Props) {
                       <p style={{ margin: '2px 0 0', fontSize: 13 }}>{incidencia.comentario_derivador}</p>
                     </div>
                   )}
+                  <Popconfirm
+                    title="¿Marcar incidencia como resuelta?"
+                    onConfirm={handleCerrar}
+                    okText="Cerrar"
+                    cancelText="Cancelar"
+                  >
+                    <Button size="small" type="primary" icon={<CheckOutlined />} style={{ marginTop: 10 }} loading={guardando}>
+                      Marcar como resuelta
+                    </Button>
+                  </Popconfirm>
                 </div>
               }
             />

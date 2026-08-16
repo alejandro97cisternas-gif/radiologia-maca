@@ -84,6 +84,9 @@ def actualizar_incidencia(inc_id: int, body: IncidenciaUpdate, request: Request,
     if body.estado == "ABIERTA":
         inc.estado = "ABIERTA"
         inc.resuelto_en = None
+    elif body.estado == "RESUELTA":
+        inc.estado = "RESUELTA"
+        inc.resuelto_en = datetime.now(timezone.utc)
     db.commit()
     db.refresh(inc)
     return _serializar(inc)
