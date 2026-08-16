@@ -17,10 +17,10 @@ interface Props {
 
 export default function PanelIncidencias({ examenes, onAbrir }: Props) {
   const conIncidencia = useMemo(
-    () => examenes.filter(e => e.incidencia_estado !== null),
+    () => examenes.filter(e => e.incidencia_estado === 'ABIERTA'),
     [examenes],
   )
-  const abiertas = conIncidencia.filter(e => e.incidencia_estado === 'ABIERTA').length
+  const abiertas = conIncidencia.length
 
   if (conIncidencia.length === 0) return null
 
@@ -28,8 +28,7 @@ export default function PanelIncidencias({ examenes, onAbrir }: Props) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <WarningOutlined style={{ color: abiertas > 0 ? '#dc2626' : '#9ca3af' }} />
       <span style={{ fontWeight: 600, fontSize: 13 }}>Incidencias</span>
-      {abiertas > 0 && <Badge count={abiertas} color="#dc2626" />}
-      {abiertas === 0 && <Tag color="success" style={{ fontSize: 11 }}>Todas resueltas</Tag>}
+      <Badge count={abiertas} color="#dc2626" />
     </div>
   )
 
