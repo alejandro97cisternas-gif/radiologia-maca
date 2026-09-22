@@ -126,7 +126,7 @@ export default function Dashboard() {
         ) : (
           <>
             {vista === 'calendario' && (
-              <CalendarioCasos casos={casos} onOpenCaso={handleOpenCaso} />
+              <CalendarioCasos casos={casos} onOpenCaso={handleOpenCaso} vacaciones={enVacaciones ? { fecha_inicio: fechaInicio?.format('YYYY-MM-DD') ?? null, fecha_retorno: fechaRetorno?.format('YYYY-MM-DD') ?? null } : undefined} />
             )}
             {vista === 'board' && (
               <BoardExamenes casos={casos} onOpenCaso={handleOpenCaso} onUpdate={cargar} />

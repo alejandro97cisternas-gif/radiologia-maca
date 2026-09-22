@@ -118,9 +118,10 @@ function CasoCardSemana({ caso, orden, onClick }: { caso: Caso; orden: number; o
 interface Props {
   casos: Caso[]
   onOpenCaso: (c: Caso) => void
+  vacaciones?: { fecha_inicio: string | null; fecha_retorno: string | null }
 }
 
-export default function CalendarioCasos({ casos, onOpenCaso }: Props) {
+export default function CalendarioCasos({ casos, onOpenCaso, vacaciones }: Props) {
   const [subVista, setSubVista] = useState<SubVista>('mes')
   const [semanaInicio, setSemanaInicio] = useState<Dayjs>(() => {
     const hoy = dayjs()
@@ -142,16 +143,26 @@ export default function CalendarioCasos({ casos, onOpenCaso }: Props) {
     return map
   }, [casos])
 
+  const vacInicio = vacaciones?.fecha_inicio ? dayjs(vacaciones.fecha_inicio) : null
+  const vacFin = vacaciones?.fecha_retorno ? dayjs(vacaciones.fecha_retorno) : null
+  const isVacDay = (d: Dayjs) => !!(vacInicio && vacFin && !d.isBefore(vacInicio, 'day') && !d.isAfter(vacFin, 'day'))
+
   // ── Vista mes ──────────────────────────────────────────────────────────────
 
   const cellRender = (current: Dayjs, info: any) => {
     if (info?.type && info.type !== 'date') return info.originNode
     const key = current.tz ? current.tz(CL).format('YYYY-MM-DD') : current.format('YYYY-MM-DD')
     const dayCasos = porDia.get(key) ?? []
-    if (!dayCasos.length) return null
+    const vac = isVacDay(current)
+    if (!dayCasos.length && !vac) return null
     const MAX = 3
     return (
       <div style={{ padding: '2px 4px' }}>
+        {vac && (
+          <div style={{ fontSize: 9, color: '#92400e', background: '#fef3c7', borderRadius: 3, padding: '1px 4px', marginBottom: 2, textAlign: 'center' }}>
+            🌴 vacaciones
+          </div>
+        )}
         {dayCasos.slice(0, MAX).map((c, i) => (
           <CasoChip key={c.caso_id} caso={c} orden={i + 1} onClick={() => onOpenCaso(c)} />
         ))}
@@ -209,6 +220,7 @@ export default function CalendarioCasos({ casos, onOpenCaso }: Props) {
             const key = dia.tz ? dia.tz(CL).format('YYYY-MM-DD') : dia.format('YYYY-MM-DD')
             const dayCasos = porDia.get(key) ?? []
             const esHoy = dia.isSame(dayjs(), 'day')
+            const esVac = isVacDay(dia)
             return (
               <div key={key} style={{ flex: 1, minWidth: 0 }}>
                 {/* Cabecera día */}
@@ -217,13 +229,13 @@ export default function CalendarioCasos({ casos, onOpenCaso }: Props) {
                   padding: '8px 4px 6px',
                   marginBottom: 8,
                   borderRadius: 8,
-                  background: esHoy ? '#2563EB' : '#f8fafc',
-                  border: `1px solid ${esHoy ? '#2563EB' : '#e2e8f0'}`,
+                  background: esHoy ? '#2563EB' : esVac ? '#fef3c7' : '#f8fafc',
+                  border: `1px solid ${esHoy ? '#2563EB' : esVac ? '#f59e0b' : '#e2e8f0'}`,
                 }}>
-                  <Typography.Text style={{ fontSize: 10, color: esHoy ? 'rgba(255,255,255,0.8)' : '#6b7280', display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <Typography.Text style={{ fontSize: 10, color: esHoy ? 'rgba(255,255,255,0.8)' : esVac ? '#92400e' : '#6b7280', display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     {DIAS[idx]}
                   </Typography.Text>
-                  <Typography.Text strong style={{ fontSize: 18, color: esHoy ? '#fff' : '#1e3a5f', lineHeight: 1.2, display: 'block' }}>
+                  <Typography.Text strong style={{ fontSize: 18, color: esHoy ? '#fff' : esVac ? '#92400e' : '#1e3a5f', lineHeight: 1.2, display: 'block' }}>
                     {dia.format('D')}
                   </Typography.Text>
                   {dayCasos.length > 0 && (
