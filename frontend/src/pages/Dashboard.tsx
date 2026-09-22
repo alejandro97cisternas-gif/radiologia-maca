@@ -185,12 +185,16 @@ export default function Dashboard() {
               </div>
             </div>
           )}
-          {enVacaciones && fechaInicio && fechaRetorno && (
-            <Typography.Text style={{ fontSize: 12, color: '#92400e', background: '#fffbeb', padding: '10px 12px', borderRadius: 6, border: '1px solid #fde68a', display: 'block', lineHeight: 1.5 }}>
-              📢 Mensaje que verán los derivadores:<br />
-              <em>«Informarles que estaré de vacaciones desde el {fechaInicio.format('D')} al {fechaRetorno.format('D')} de {fechaRetorno.format('MMMM')}. Pueden solicitar exámenes en ese tiempo pero se entregarán a partir del {fechaRetorno.add(1, 'day').format('D')} de {fechaRetorno.add(1, 'day').format('MMMM')} por orden de llegada.»</em>
-            </Typography.Text>
-          )}
+          {enVacaciones && fechaInicio && fechaRetorno && (() => {
+            const fmtD = (d: Dayjs) => d.toDate().toLocaleDateString('es-CL', { day: 'numeric', month: 'long' })
+            const retorno1 = fechaRetorno.add(1, 'day')
+            return (
+              <Typography.Text style={{ fontSize: 12, color: '#92400e', background: '#fffbeb', padding: '10px 12px', borderRadius: 6, border: '1px solid #fde68a', display: 'block', lineHeight: 1.5 }}>
+                📢 Mensaje que verán los derivadores:<br />
+                <em>«Informarles que estaré de vacaciones desde el {fmtD(fechaInicio)} al {fmtD(fechaRetorno)}. Pueden solicitar exámenes en ese tiempo pero se entregarán a partir del {fmtD(retorno1)} por orden de llegada.»</em>
+              </Typography.Text>
+            )
+          })()}
         </div>
       </Modal>
     </div>
