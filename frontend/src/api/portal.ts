@@ -10,7 +10,7 @@ export const portalSolicitarAcceso = (email: string) =>
   axios.post(`${BASE}/api/portal/solicitar-acceso`, { email }).then(r => r.data)
 
 export const portalTenantInfo = () =>
-  axios.get(`${BASE}/api/portal/tenant-info`).then(r => r.data as { nombre_display: string; en_vacaciones: boolean; fecha_inicio: string | null; fecha_retorno: string | null })
+  portalApi.get('/api/portal/tenant-info').then(r => r.data as { nombre_display: string; en_vacaciones: boolean; fecha_inicio: string | null; fecha_retorno: string | null })
 
 export const portalMe = () => portalApi.get('/api/portal/me').then(r => r.data)
 
