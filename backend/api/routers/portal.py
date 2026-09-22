@@ -56,6 +56,7 @@ def tenant_info(request: Request):
     return {
         "nombre_display": radiologo.nombre_display or "Radiología",
         "en_vacaciones": radiologo.en_vacaciones or False,
+        "fecha_inicio": radiologo.fecha_inicio_vacaciones.isoformat() if radiologo.fecha_inicio_vacaciones else None,
         "fecha_retorno": radiologo.fecha_retorno.isoformat() if radiologo.fecha_retorno else None,
     }
 

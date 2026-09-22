@@ -7,10 +7,10 @@ export async function login(username: string, password: string): Promise<string>
 
 export async function getMe() {
   const res = await api.get('/api/auth/me')
-  return res.data as { id: number; username: string; nombre_display: string; slug: string; en_vacaciones: boolean; fecha_retorno: string | null }
+  return res.data as { id: number; username: string; nombre_display: string; slug: string; en_vacaciones: boolean; fecha_inicio: string | null; fecha_retorno: string | null }
 }
 
-export async function updateVacaciones(en_vacaciones: boolean, fecha_retorno: string | null) {
-  const res = await api.patch('/api/auth/me/vacaciones', { en_vacaciones, fecha_retorno })
-  return res.data as { en_vacaciones: boolean; fecha_retorno: string | null }
+export async function updateVacaciones(en_vacaciones: boolean, fecha_inicio: string | null, fecha_retorno: string | null) {
+  const res = await api.patch('/api/auth/me/vacaciones', { en_vacaciones, fecha_inicio, fecha_retorno })
+  return res.data as { en_vacaciones: boolean; fecha_inicio: string | null; fecha_retorno: string | null }
 }

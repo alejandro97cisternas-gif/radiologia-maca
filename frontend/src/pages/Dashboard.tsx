@@ -22,6 +22,7 @@ export default function Dashboard() {
   const [casoAbierto, setCasoAbierto] = useState<Caso | null>(null)
   const [modalVac, setModalVac] = useState(false)
   const [enVacaciones, setEnVacaciones] = useState(false)
+  const [fechaInicio, setFechaInicio] = useState<Dayjs | null>(null)
   const [fechaRetorno, setFechaRetorno] = useState<Dayjs | null>(null)
   const [savingVac, setSavingVac] = useState(false)
 
@@ -41,16 +42,22 @@ export default function Dashboard() {
     getMe().then(u => {
       document.title = `Portal Doctor · ${u.nombre_display || u.username}`
       setEnVacaciones(u.en_vacaciones)
+      setFechaInicio(u.fecha_inicio ? dayjs(u.fecha_inicio) : null)
       setFechaRetorno(u.fecha_retorno ? dayjs(u.fecha_retorno) : null)
     }).catch(() => {})
   }, [cargar])
 
   const guardarVacaciones = async () => {
+    if (enVacaciones && !fechaInicio) { message.warning('Selecciona la fecha de inicio'); return }
     if (enVacaciones && !fechaRetorno) { message.warning('Selecciona la fecha de retorno'); return }
     setSavingVac(true)
     try {
-      await updateVacaciones(enVacaciones, enVacaciones ? fechaRetorno!.format('YYYY-MM-DD') : null)
-      message.success(enVacaciones ? `Vacaciones activadas hasta el ${fechaRetorno!.format('DD/MM/YYYY')}` : 'Vacaciones desactivadas')
+      await updateVacaciones(
+        enVacaciones,
+        enVacaciones ? fechaInicio!.format('YYYY-MM-DD') : null,
+        enVacaciones ? fechaRetorno!.format('YYYY-MM-DD') : null,
+      )
+      message.success(enVacaciones ? `Vacaciones activadas del ${fechaInicio!.format('DD/MM')} al ${fechaRetorno!.format('DD/MM/YYYY')}` : 'Vacaciones desactivadas')
       setModalVac(false)
     } catch { message.error('Error al guardar') }
     finally { setSavingVac(false) }
@@ -97,7 +104,7 @@ export default function Dashboard() {
             style={enVacaciones ? { borderColor: '#f59e0b', color: '#f59e0b' } : {}}
             title="Gestionar vacaciones"
           >
-            {enVacaciones ? `Vacaciones · ${fechaRetorno?.format('DD/MM')}` : 'Vacaciones'}
+            {enVacaciones && fechaInicio && fechaRetorno ? `Vac. ${fechaInicio.format('DD/MM')}–${fechaRetorno.format('DD/MM')}` : 'Vacaciones'}
           </Button>
         </div>
         <Segmented
@@ -150,23 +157,38 @@ export default function Dashboard() {
             <Switch checked={enVacaciones} onChange={setEnVacaciones} />
           </div>
           {enVacaciones && (
-            <div>
-              <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 13 }}>
-                Fecha de retorno (los derivadores verán esta fecha en sus exámenes)
-              </Typography.Text>
-              <DatePicker
-                value={fechaRetorno}
-                onChange={setFechaRetorno}
-                format="DD/MM/YYYY"
-                placeholder="Selecciona fecha de retorno"
-                style={{ width: '100%' }}
-                disabledDate={d => d.isBefore(dayjs(), 'day')}
-              />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 6, fontSize: 13 }}>
+                  Fecha de inicio de vacaciones
+                </Typography.Text>
+                <DatePicker
+                  value={fechaInicio}
+                  onChange={setFechaInicio}
+                  format="DD/MM/YYYY"
+                  placeholder="Selecciona fecha de inicio"
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div>
+                <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 6, fontSize: 13 }}>
+                  Fecha de retorno
+                </Typography.Text>
+                <DatePicker
+                  value={fechaRetorno}
+                  onChange={setFechaRetorno}
+                  format="DD/MM/YYYY"
+                  placeholder="Selecciona fecha de retorno"
+                  style={{ width: '100%' }}
+                  disabledDate={d => fechaInicio ? d.isBefore(fechaInicio, 'day') : false}
+                />
+              </div>
             </div>
           )}
-          {enVacaciones && fechaRetorno && (
-            <Typography.Text style={{ fontSize: 12, color: '#f59e0b', background: '#fffbeb', padding: '8px 12px', borderRadius: 6, border: '1px solid #fde68a' }}>
-              Los derivadores verán un aviso indicando que los informes se entregarán a partir del {fechaRetorno.format('DD/MM/YYYY')}.
+          {enVacaciones && fechaInicio && fechaRetorno && (
+            <Typography.Text style={{ fontSize: 12, color: '#92400e', background: '#fffbeb', padding: '10px 12px', borderRadius: 6, border: '1px solid #fde68a', display: 'block', lineHeight: 1.5 }}>
+              📢 Mensaje que verán los derivadores:<br />
+              <em>«Informarles que estaré de vacaciones desde el {fechaInicio.format('D')} al {fechaRetorno.format('D')} de {fechaRetorno.format('MMMM')}. Pueden solicitar exámenes en ese tiempo pero se entregarán a partir del {fechaRetorno.add(1, 'day').format('D')} de {fechaRetorno.add(1, 'day').format('MMMM')} por orden de llegada.»</em>
             </Typography.Text>
           )}
         </div>

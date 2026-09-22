@@ -211,7 +211,7 @@ export default function PortalDashboard() {
   const [info, setInfo] = useState<any>(null)
   const [examenes, setExamenes] = useState<any[]>([])
   const [vista, setVista] = useState<Vista>('board')
-  const [vacInfo, setVacInfo] = useState<{ en_vacaciones: boolean; fecha_retorno: string | null } | null>(null)
+  const [vacInfo, setVacInfo] = useState<{ en_vacaciones: boolean; fecha_inicio: string | null; fecha_retorno: string | null } | null>(null)
   const [notificaciones, setNotificaciones] = useState<NotificacionPortal[]>([])
   const [notifOpen, setNotifOpen] = useState(false)
   const [casoModal, setCasoModal] = useState<any | null>(null)
@@ -258,7 +258,7 @@ export default function PortalDashboard() {
 
   useEffect(() => {
     cargar()
-    portalTenantInfo().then(t => setVacInfo({ en_vacaciones: t.en_vacaciones, fecha_retorno: t.fecha_retorno })).catch(() => {})
+    portalTenantInfo().then(t => setVacInfo({ en_vacaciones: t.en_vacaciones, fecha_inicio: t.fecha_inicio, fecha_retorno: t.fecha_retorno })).catch(() => {})
     const intervalo = setInterval(cargarNotificaciones, 30_000)
     return () => clearInterval(intervalo)
   }, [])
@@ -306,9 +306,18 @@ export default function PortalDashboard() {
     return map
   }, [casos])
 
+  const vacInicio = vacInfo?.en_vacaciones && vacInfo.fecha_inicio ? dayjs(vacInfo.fecha_inicio) : null
+  const vacFin = vacInfo?.en_vacaciones && vacInfo.fecha_retorno ? dayjs(vacInfo.fecha_retorno) : null
+
   const cellRender = (date: Dayjs) => {
     const n = porDia[date.format('YYYY-MM-DD')]
-    return n ? <Badge count={n} size="small" color="#2563EB" /> : null
+    const isVac = vacInicio && vacFin && !date.isBefore(vacInicio, 'day') && !date.isAfter(vacFin, 'day')
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+        {n ? <Badge count={n} size="small" color="#2563EB" /> : null}
+        {isVac ? <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b' }} title="Vacaciones doctora" /> : null}
+      </div>
+    )
   }
 
   return (
@@ -381,11 +390,21 @@ export default function PortalDashboard() {
               showIcon
               icon={<WarningOutlined />}
               style={{ marginBottom: 16 }}
-              message={
-                vacInfo.fecha_retorno
-                  ? `La doctora está de vacaciones. Los informes serán entregados a partir del ${new Date(vacInfo.fecha_retorno + 'T00:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })}.`
-                  : 'La doctora está de vacaciones. Los informes serán entregados cuando retorne.'
-              }
+              message={(() => {
+                const fmtDate = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'long' })
+                const fmtFull = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
+                const nextDay = (iso: string) => {
+                  const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + 1)
+                  return d.toLocaleDateString('es-CL', { day: 'numeric', month: 'long' })
+                }
+                if (vacInfo.fecha_inicio && vacInfo.fecha_retorno) {
+                  return `Informarles que estaré de vacaciones desde el ${fmtDate(vacInfo.fecha_inicio)} al ${fmtFull(vacInfo.fecha_retorno)}. Pueden solicitar exámenes en ese tiempo pero se entregarán a partir del ${nextDay(vacInfo.fecha_retorno)} por orden de llegada.`
+                }
+                if (vacInfo.fecha_retorno) {
+                  return `La doctora está de vacaciones. Los informes se entregarán a partir del ${nextDay(vacInfo.fecha_retorno)} por orden de llegada.`
+                }
+                return 'La doctora está de vacaciones. Los informes serán entregados cuando retorne.'
+              })()}
             />
           )}
           {vista === 'board' && (
@@ -403,9 +422,16 @@ export default function PortalDashboard() {
                 cellRender={cellRender}
                 style={{ border: '1px solid #e2e8f0', borderRadius: 8 }}
               />
-              <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
-                Los badges indican exámenes ingresados cada día.
-              </Typography.Text>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 8 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  🔵 Exámenes ingresados
+                </Typography.Text>
+                {vacInfo?.en_vacaciones && (
+                  <Typography.Text style={{ fontSize: 12, color: '#92400e' }}>
+                    🟡 Vacaciones doctora
+                  </Typography.Text>
+                )}
+              </div>
             </div>
           )}
 

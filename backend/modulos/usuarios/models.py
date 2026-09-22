@@ -19,6 +19,7 @@ class Usuario(Base):
     activo = Column(Boolean, default=True)
     creado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     en_vacaciones = Column(Boolean, default=False, server_default='false')
+    fecha_inicio_vacaciones = Column(Date, nullable=True)
     fecha_retorno = Column(Date, nullable=True)
 
     derivadores = relationship("Derivador", back_populates="radiologo")

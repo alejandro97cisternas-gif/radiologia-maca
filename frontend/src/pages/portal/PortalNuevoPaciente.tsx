@@ -519,11 +519,11 @@ export default function PortalNuevoPaciente() {
   const [tipos, setTipos] = useState<TipoExamen[]>([])
   const tiposMap = new Map<string, '2D' | '3D' | 'AMBOS'>(tipos.map(t => [t.nombre, t.dimension]))
 
-  const [vacInfo, setVacInfo] = useState<{ en_vacaciones: boolean; fecha_retorno: string | null } | null>(null)
+  const [vacInfo, setVacInfo] = useState<{ en_vacaciones: boolean; fecha_inicio: string | null; fecha_retorno: string | null } | null>(null)
 
   useEffect(() => {
     portalGetTipos().then(setTipos).catch(() => {})
-    portalTenantInfo().then(t => setVacInfo({ en_vacaciones: t.en_vacaciones, fecha_retorno: t.fecha_retorno })).catch(() => {})
+    portalTenantInfo().then(t => setVacInfo({ en_vacaciones: t.en_vacaciones, fecha_inicio: t.fecha_inicio, fecha_retorno: t.fecha_retorno })).catch(() => {})
   }, [])
 
   // Paso 0 — Paciente
@@ -674,13 +674,20 @@ export default function PortalNuevoPaciente() {
 
   const notificar = () => {
     if (vacInfo?.en_vacaciones) {
-      const fechaTxt = vacInfo.fecha_retorno
-        ? new Date(vacInfo.fecha_retorno + 'T00:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
-        : 'próximamente'
+      const fmtDate = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'long' })
+      const nextDay = (iso: string) => {
+        const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + 1)
+        return d.toLocaleDateString('es-CL', { day: 'numeric', month: 'long' })
+      }
+      const msg = vacInfo.fecha_inicio && vacInfo.fecha_retorno
+        ? `Informarles que estaré de vacaciones desde el ${fmtDate(vacInfo.fecha_inicio)} al ${fmtDate(vacInfo.fecha_retorno)}. Pueden solicitar exámenes en ese tiempo pero se entregarán a partir del ${nextDay(vacInfo.fecha_retorno)} por orden de llegada.`
+        : vacInfo.fecha_retorno
+          ? `Los informes se entregarán a partir del ${nextDay(vacInfo.fecha_retorno)} por orden de llegada.`
+          : 'La doctora está de vacaciones. Los informes serán entregados cuando retorne.'
       Modal.confirm({
         title: 'La doctora está de vacaciones',
-        content: `El informe será entregado a partir del ${fechaTxt}, cuando la doctora retorne. ¿Deseas enviar el caso de todas formas?`,
-        okText: 'Sí, enviar',
+        content: msg,
+        okText: 'Sí, enviar de todas formas',
         cancelText: 'Cancelar',
         onOk: _ejecutarNotificar,
       })

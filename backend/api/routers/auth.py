@@ -45,22 +45,26 @@ def me(usuario: Usuario = Depends(get_current_user)):
         "nombre_display": usuario.nombre_display,
         "slug": usuario.slug,
         "en_vacaciones": usuario.en_vacaciones or False,
+        "fecha_inicio": usuario.fecha_inicio_vacaciones.isoformat() if usuario.fecha_inicio_vacaciones else None,
         "fecha_retorno": usuario.fecha_retorno.isoformat() if usuario.fecha_retorno else None,
     }
 
 
 class VacacionesBody(BaseModel):
     en_vacaciones: bool
+    fecha_inicio: Optional[date] = None
     fecha_retorno: Optional[date] = None
 
 
 @router.patch("/me/vacaciones")
 def actualizar_vacaciones(body: VacacionesBody, usuario: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
     usuario.en_vacaciones = body.en_vacaciones
+    usuario.fecha_inicio_vacaciones = body.fecha_inicio if body.en_vacaciones else None
     usuario.fecha_retorno = body.fecha_retorno if body.en_vacaciones else None
     db.commit()
     return {
         "en_vacaciones": usuario.en_vacaciones,
+        "fecha_inicio": usuario.fecha_inicio_vacaciones.isoformat() if usuario.fecha_inicio_vacaciones else None,
         "fecha_retorno": usuario.fecha_retorno.isoformat() if usuario.fecha_retorno else None,
     }
 
