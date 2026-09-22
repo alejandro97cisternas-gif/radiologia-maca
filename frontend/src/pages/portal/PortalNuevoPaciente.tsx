@@ -11,7 +11,7 @@ import dayjs from 'dayjs'
 import {
   portalBuscarPaciente, portalCrearPaciente, portalCrearExamen,
   portalConfirmarTareas, portalNotificarCaso, portalGuardarNota,
-  portalGetTipos, portalEliminarExamen,
+  portalGetTipos, portalEliminarExamen, portalTenantInfo,
 } from '../../api/portal'
 import { useUpload } from '../../context/UploadContext'
 import { readDropItems, filterDicomFromFiles, extractDicomFromZip, pathToUbicacion } from '../../utils/dicomUpload'
@@ -519,7 +519,12 @@ export default function PortalNuevoPaciente() {
   const [tipos, setTipos] = useState<TipoExamen[]>([])
   const tiposMap = new Map<string, '2D' | '3D' | 'AMBOS'>(tipos.map(t => [t.nombre, t.dimension]))
 
-  useEffect(() => { portalGetTipos().then(setTipos).catch(() => {}) }, [])
+  const [vacInfo, setVacInfo] = useState<{ en_vacaciones: boolean; fecha_retorno: string | null } | null>(null)
+
+  useEffect(() => {
+    portalGetTipos().then(setTipos).catch(() => {})
+    portalTenantInfo().then(t => setVacInfo({ en_vacaciones: t.en_vacaciones, fecha_retorno: t.fecha_retorno })).catch(() => {})
+  }, [])
 
   // Paso 0 — Paciente
   const [formPaciente] = Form.useForm()
@@ -642,7 +647,7 @@ export default function PortalNuevoPaciente() {
   // ── Paso 2: Confirmar + Notificar (un solo paso) ─────────────────────────────
   const [comentariosPorExamen, setComentariosPorExamen] = useState<Record<string, string>>({})
 
-  const notificar = async () => {
+  const _ejecutarNotificar = async () => {
     setLoading(true)
     try {
       const ids = examenesListos.map(e => e.examen_id!)
@@ -664,6 +669,23 @@ export default function PortalNuevoPaciente() {
       message.error('Error al enviar la notificación')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const notificar = () => {
+    if (vacInfo?.en_vacaciones) {
+      const fechaTxt = vacInfo.fecha_retorno
+        ? new Date(vacInfo.fecha_retorno + 'T00:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
+        : 'próximamente'
+      Modal.confirm({
+        title: 'La doctora está de vacaciones',
+        content: `El informe será entregado a partir del ${fechaTxt}, cuando la doctora retorne. ¿Deseas enviar el caso de todas formas?`,
+        okText: 'Sí, enviar',
+        cancelText: 'Cancelar',
+        onOk: _ejecutarNotificar,
+      })
+    } else {
+      _ejecutarNotificar()
     }
   }
 

@@ -15,7 +15,7 @@ import type { Incidencia } from '../../api/incidencias'
 import PanelIncidencias from '../../components/PanelIncidencias'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
-import { portalMe, portalGetExamenes, portalEliminarExamen, portalGetNotificaciones, portalLeerNotificacion, portalLeerTodas } from '../../api/portal'
+import { portalMe, portalGetExamenes, portalEliminarExamen, portalGetNotificaciones, portalLeerNotificacion, portalLeerTodas, portalTenantInfo } from '../../api/portal'
 import NovexBadge from '../../components/NovexBadge'
 import type { NotificacionPortal } from '../../api/portal'
 
@@ -211,6 +211,7 @@ export default function PortalDashboard() {
   const [info, setInfo] = useState<any>(null)
   const [examenes, setExamenes] = useState<any[]>([])
   const [vista, setVista] = useState<Vista>('board')
+  const [vacInfo, setVacInfo] = useState<{ en_vacaciones: boolean; fecha_retorno: string | null } | null>(null)
   const [notificaciones, setNotificaciones] = useState<NotificacionPortal[]>([])
   const [notifOpen, setNotifOpen] = useState(false)
   const [casoModal, setCasoModal] = useState<any | null>(null)
@@ -257,6 +258,7 @@ export default function PortalDashboard() {
 
   useEffect(() => {
     cargar()
+    portalTenantInfo().then(t => setVacInfo({ en_vacaciones: t.en_vacaciones, fecha_retorno: t.fecha_retorno })).catch(() => {})
     const intervalo = setInterval(cargarNotificaciones, 30_000)
     return () => clearInterval(intervalo)
   }, [])
@@ -373,6 +375,19 @@ export default function PortalDashboard() {
 
         {/* Contenido */}
         <Content style={{ flex: 1, overflow: 'auto', padding: 24, background: '#f8fafc' }}>
+          {vacInfo?.en_vacaciones && (
+            <Alert
+              type="warning"
+              showIcon
+              icon={<WarningOutlined />}
+              style={{ marginBottom: 16 }}
+              message={
+                vacInfo.fecha_retorno
+                  ? `La doctora está de vacaciones. Los informes serán entregados a partir del ${new Date(vacInfo.fecha_retorno + 'T00:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })}.`
+                  : 'La doctora está de vacaciones. Los informes serán entregados cuando retorne.'
+              }
+            />
+          )}
           {vista === 'board' && (
             <div id="portal-board">
               <BoardPortal casos={casos} onVer={onVerCaso} onIncidencia={abrirIncidencia} />

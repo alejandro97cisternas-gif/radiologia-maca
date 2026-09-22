@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from core.database import Base
@@ -18,5 +18,7 @@ class Usuario(Base):
     email = Column(String, nullable=True)
     activo = Column(Boolean, default=True)
     creado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    en_vacaciones = Column(Boolean, default=False, server_default='false')
+    fecha_retorno = Column(Date, nullable=True)
 
     derivadores = relationship("Derivador", back_populates="radiologo")

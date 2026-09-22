@@ -53,7 +53,11 @@ class FinalizarSubidaBody(BaseModel):
 def tenant_info(request: Request):
     from core.tenant import get_tenant
     radiologo = get_tenant(request)
-    return {"nombre_display": radiologo.nombre_display or "Radiología"}
+    return {
+        "nombre_display": radiologo.nombre_display or "Radiología",
+        "en_vacaciones": radiologo.en_vacaciones or False,
+        "fecha_retorno": radiologo.fecha_retorno.isoformat() if radiologo.fecha_retorno else None,
+    }
 
 
 class SolicitarAccesoBody(BaseModel):
